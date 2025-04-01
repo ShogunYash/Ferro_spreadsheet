@@ -1,0 +1,9 @@
+[package]
+name = "spreadsheet"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+regex = "1.9.3"      # For parsing formulas
+lazy_static = "1.4.0" # For regex compilation
+clap = "4.4.6"       # For command line argument parsing
