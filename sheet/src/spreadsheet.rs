@@ -91,6 +91,12 @@ impl Spreadsheet {
         
         Some(&mut self.grid[index])
     }
+    pub fn get_rows(&self) -> i16 {// required in parse expression to validate row 
+        self.rows
+    }
+    pub fn get_cols(&self) -> i16 {
+        self.cols
+    }
 
     pub fn print_spreadsheet(&self){
         if !self.output_enabled {

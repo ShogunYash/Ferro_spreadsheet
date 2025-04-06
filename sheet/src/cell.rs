@@ -63,6 +63,11 @@ impl Cell {
             Ok(r) => r - 1,
             Err(_) => return Err(CommandStatus::CmdUnrecognized),
         };
+        if row >= sheet.get_rows() || row < 0 {
+            return Err(CommandStatus::CmdUnrecognized);
+        }
+        
+       
         
         // Convert column name to column index
         let col = sheet.column_name_to_index(&col_name);
