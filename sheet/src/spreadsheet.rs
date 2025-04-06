@@ -11,13 +11,14 @@ pub enum CommandStatus {
     CmdOk,
     CmdUnrecognized,
     CmdCircularRef,
+    CmdInvalidCell,
 }
 
 // Spreadsheet structure now uses a contiguous array for grid
 pub struct Spreadsheet {
     grid: Vec<Cell>,         // Vector of Cells (contiguous in memory)
-    pub rows: i16,
-    pub cols: i16,
+    rows: i16,
+    cols: i16,
     viewport_row: i16,
     viewport_col: i16,
     output_enabled: bool,
@@ -69,14 +70,27 @@ impl Spreadsheet {
         index - 1 // Convert from 1-based to 0-based
     }
 
-    pub fn get_cell(&self, row: i16, col: i16) -> &Cell {
+    pub fn get_cell(&self, row: i16, col: i16) -> Option<&Cell> {
+        if row < 0 || row >= self.rows || col < 0 || col >= self.cols {
+            return None;
+        }
+        
         let index = (row as usize) * (self.cols as usize) + (col as usize);
-        &self.grid[index]
+        if index >= self.grid.len() {
+            return None;
+        }
+        
+        Some(&self.grid[index])
     }
     
-    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut Cell {
+    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> Option<&mut Cell> {
+        if row < 0 || row >= self.rows || col < 0 || col >= self.cols {
+            return None;
+        }
+        
         let index = (row as usize) * (self.cols as usize) + (col as usize);
-        &mut self.grid[index]
+        
+        Some(&mut self.grid[index])
     }
 
     pub fn print_spreadsheet(&self){
@@ -100,13 +114,71 @@ impl Spreadsheet {
         for i in 0..display_row {
             print!("{:<4} ", start_row + i + 1); // Show 1-based row numbers
             for j in 0..display_col {
-                let cell = self.get_cell(start_row + i, start_col + j); 
+                if let Some(cell) = self.get_cell(start_row + i, start_col + j) {
                     match cell.value {
                         CellValue::Integer(value) => print!("{:<8} ", value),
                         CellValue::Error => print!("{:<8} ", "ERR"),
                     }
+                } else {
+                    print!("{:<8} ", "???"); // Indicate an access error
+                }
             }
             println!();
         }
+    }
+
+    pub fn scroll_to_cell(&mut self, cell: &str) -> CommandStatus {
+        let dummy_cell = Cell::new();
+        match dummy_cell.parse_cell_reference(self, cell) {
+            Ok((row, col)) => {
+                if row>=0 && row < self.rows && col >= 0 && col < self.cols {
+                    self.viewport_row = row;
+                    self.viewport_col = col;
+                    return CommandStatus::CmdOk;
+                } else {
+                    return CommandStatus::CmdInvalidCell;
+                }
+            }
+            Err(_) => {
+                return CommandStatus::CmdUnrecognized;
+            }
+        }
+    }
+
+
+    pub fn scroll_viewport(&mut self, direction: char) {
+        const VIEWPORT_SIZE: i16 = 10;
+            match direction {
+                'w'=> {
+                    self.viewport_row = if self.viewport_row > 10 {
+                        self.viewport_row - 10
+                    } else {
+                        0
+                    };
+                }
+                's'=> {
+                    if self.viewport_row + VIEWPORT_SIZE < self.rows {
+                        self.viewport_row += 10;
+                    } else {
+                        self.viewport_row = self.rows - VIEWPORT_SIZE;
+                    }
+                }
+                'a'=> {
+                    self.viewport_col = if self.viewport_col > 10 {
+                        self.viewport_col - 10
+                    } else {
+                        0
+                    };
+                }
+
+                'd'=> {
+                    if self.viewport_col + VIEWPORT_SIZE < self.cols {
+                        self.viewport_col += 10;
+                    } else {
+                        self.viewport_col = self.cols - VIEWPORT_SIZE;
+                    }
+                }
+                _ => {} // Invalid direction, do nothing
+            }
     }
 }
