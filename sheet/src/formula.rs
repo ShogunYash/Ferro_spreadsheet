@@ -64,67 +64,17 @@ fn has_circular_reference(
     false
 }
 
-// Parse an expression
-fn parse_expression(sheet: &mut Spreadsheet, row: usize, col: usize, expr: &str) -> Result<CellValue, String> {
-    lazy_static! {
-        // Regex for functions
-        static ref FUNCTION: Regex = Regex::new(r"^(MIN|MAX|AVG|SUM|STDEV|SLEEP)\((.+)\)$").unwrap();
-        
-        // Regex for arithmetic operations
-        static ref ARITHMETIC: Regex = Regex::new(r"^(.+?)([+\-*/])(.+)$").unwrap();
-        
-        // Regex for cell references
-        static ref CELL_REF: Regex = Regex::new(r"^([A-Z]+[0-9]+)$").unwrap();
-        
-        // Regex for ranges
-        static ref RANGE: Regex = Regex::new(r"^([A-Z]+[0-9]+):([A-Z]+[0-9]+)$").unwrap();
-    }
-    
-    // Try to parse as an integer constant
-    if let Ok(value) = expr.parse::<i32>() {
-        return Ok(CellValue::Integer(value));
-    }
-    
-    // Try to parse as a function
-    if let Some(caps) = FUNCTION.captures(expr) {
-        let function_name = caps.get(1).unwrap().as_str();
-        let args = caps.get(2).unwrap().as_str();
-        
-        return match function_name {
-            "MIN" => eval_min(sheet, row, col, args),
-            "MAX" => eval_max(sheet, row, col, args),
-            "AVG" => eval_avg(sheet, row, col, args),
-            "SUM" => eval_sum(sheet, row, col, args),
-            "STDEV" => eval_stdev(sheet, row, col, args),
-            "SLEEP" => eval_sleep(sheet, row, col, args),
-            _ => Err(format!("Unknown function: {}", function_name)),
-        };
-    }
-    
-    // Try to parse as an arithmetic operation
-    if let Some(caps) = ARITHMETIC.captures(expr) {
-        let left = caps.get(1).unwrap().as_str();
-        let operator = caps.get(2).unwrap().as_str();
-        let right = caps.get(3).unwrap().as_str();
-        
-        return eval_arithmetic(sheet, row, col, left, operator, right);
-    }
-    
-    // Try to parse as a cell reference
-    if let Some(caps) = CELL_REF.captures(expr) {
-        let cell_ref = caps.get(1).unwrap().as_str();
-        return eval_cell_reference(sheet, row, col, cell_ref);
-    }
-    
-    Err(format!("Invalid expression: {}", expr))
-}
+
 
 // Evaluate a cell reference
-fn eval_cell_reference(sheet: &mut Spreadsheet, from_row: usize, from_col: usize, cell_ref: &str) -> Result<CellValue, String> {
-    let (to_row, to_col) = sheet.parse_cell_reference(cell_ref)?;
-    
-    // Register the dependency
-    sheet.register_dependency(from_row, from_col, to_row, to_col);
+fn eval_cell_reference(sheet: &mut Spreadsheet, from_row: usize, from_col: usize, cell_ref: &str) -> Result<CellValue, CommandStatus> {
+    // let (to_row, to_col) = sheet.parse_cell_reference(cell_ref);
+    if let Ok((parent_row, parent_col)) = sheet.parse_cell_reference(cell_ref) {
+        let cell = sheet.get_mut_cell(parent_row, parent_col).unwrap();
+        
+    } else {
+        return Err(CommandStatus::CmdUnrecognized);
+    }
     
     // Get the cell value
     sheet.get_cell_value(to_row, to_col)
