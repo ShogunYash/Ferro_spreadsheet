@@ -20,7 +20,7 @@ pub fn handle_sleep(
     let cell_ref = parse_cell_reference(sheet, expr);
     if cell_ref == Ok(_) {
         let (row, col) = cell_ref.unwrap();
-        let parent_cell = sheet.get_cell(row, col).unwrap();
+        let parent_cell = sheet.get_cell(row, col);
         cell.formula = 102;    // Custom formula code for sleep
         cell.parent1 = get_key(row, col, sheet.cols);
         cell.parent2 = -1;    // No second parent for sleep
@@ -127,7 +127,7 @@ pub fn evaluate_formula(
 
 
 pub fn set_cell_value(sheet: &mut Spreadsheet, row: i16, col: i16, expr: &str, sleep_time: &mut f64) -> CommandStatus {
-        let cell = sheet.get_mut_cell(row, col).unwrap();
+        let cell = sheet.get_mut_cell(row, col);
         let status = evaluate_formula(sheet, cell, row, col, expr, sleep_time);
         status
 }

@@ -65,7 +65,6 @@ fn has_circular_reference(
 }
 
 
-
 // Evaluate a cell reference
 fn eval_cell_reference(sheet: &mut Spreadsheet, from_row: usize, from_col: usize, cell_ref: &str) -> Result<CellValue, CommandStatus> {
     // let (to_row, to_col) = sheet.parse_cell_reference(cell_ref);
