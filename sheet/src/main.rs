@@ -1,6 +1,7 @@
 mod cell;
 mod spreadsheet;
-
+mod evaluator;
+mod formula;
 use std::env;
 use std::io::{self, Write};
 use std::process;
@@ -8,7 +9,6 @@ use std::time::Instant;
 
 use spreadsheet::Spreadsheet;
 use spreadsheet::CommandStatus;
-
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {

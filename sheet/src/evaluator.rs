@@ -1,9 +1,10 @@
-use crate::spreadsheet::{Spreadsheet, CommandStatus};
-use crate::cell::{Cell, CellValue};
-use crate::formula::{min_max, sum_value, variance};
-use regex::Regex;
-use lazy_static::lazy_static;
 
+use crate::spreadsheet::{Spreadsheet, CommandStatus};
+use crate::cell::{Cell, CellValue, parse_cell_reference};
+// use crate::formula::{sum_value, min_max, variance};
+use crate::formula::parse_range;
+use crate::formula::Range;
+use crate::formula::{eval_max,eval_min};
 pub fn get_key(row: i16, col: i16, cols: i16) -> i32 {
     ((row as i32 )* (cols as i32) + (col as i32)) as i32
 }
@@ -16,7 +17,7 @@ pub fn handle_sleep(
     expr: &str,
     sleep_time: &mut f64,
 ) -> CommandStatus{
-    let cell_ref = cell.parse_cell_reference(sheet, expr);
+    let cell_ref = parse_cell_reference(sheet, expr);
     if cell_ref == Ok(_) {
         let (row, col) = cell_ref.unwrap();
         let parent_cell = sheet.get_cell(row, col).unwrap();
@@ -31,77 +32,102 @@ pub fn handle_sleep(
             cell.value = CellValue::Error;
         }
     }
-    else if Ok(val) == expr.parse::<i32>() {
+    else if let Ok(val) = expr.parse::<i32>() {
         cell.value = CellValue::Integer(val);
-        *sleep_time += val;
+        *sleep_time += val as f64;
         cell.formula = -1;
         cell.parent1 = -1;
         cell.parent2 = -1;
     }
     else{
-        return CmdUnrecognized;
+        return CommandStatus::CmdUnrecognized;
     }
 
-    CmdOk
+    CommandStatus::CmdOk
 }
 
-// Parse an expression
-fn parse_expression(sheet: &mut Spreadsheet, row: i16, col: i16, expr: &str) -> Result<CellValue, CommandStatus> {
-    lazy_static! {
-        // Regex for functions
-        static ref FUNCTION: Regex = Regex::new(r"^(MIN|MAX|AVG|SUM|STDEV|SLEEP)\((.+)\)$").unwrap();
-        
-        // Regex for arithmetic operations
-        static ref ARITHMETIC: Regex = Regex::new(r"^(.+?)([+\-*])(.+)$").unwrap();
-        
-        // Regex for cell references
-        static ref CELL_REF: Regex = Regex::new(r"^([A-Z]+[0-9]+)$").unwrap();
-        
-        // Regex for ranges
-        static ref RANGE: Regex = Regex::new(r"^([A-Z]+[0-9]+):([A-Z]+[0-9]+)$").unwrap();
+pub fn evaluate_formula(
+    sheet: &mut Spreadsheet,
+    cell: &mut Cell,
+    row: i16,
+    col: i16,
+    expr: &str,
+    sleep_time: &mut f64,
+) -> CommandStatus {
+    let expr_len = expr.len();
+    if expr_len == 0 {
+        return CommandStatus::CmdUnrecognized;
     }
-    
-    // Try to parse as an integer constant
-    if let Ok(value) = expr.parse::<i32>() {
-        return Ok(CellValue::Integer(value));
-    }
-    
-    // Try to parse as a function
-    if let Some(caps) = FUNCTION.captures(expr) {
-        let function_name = caps.get(1).unwrap().as_str();
-        let args = caps.get(2).unwrap().as_str();
-        
-        return match function_name {
-            "MIN" => eval_min(sheet, row, col, args),
-            "MAX" => eval_max(sheet, row, col, args),
-            "AVG" => eval_avg(sheet, row, col, args),
-            "SUM" => eval_sum(sheet, row, col, args),
-            "STDEV" => eval_stdev(sheet, row, col, args),
-            "SLEEP" => eval_sleep(sheet, row, col, args),
-            _ => Err(CommandStatus::CmdUnrecognized),
+
+    let is_avg = expr.starts_with("AVG(");
+    let is_min = expr.starts_with("MIN(");
+    let is_max = expr.starts_with("MAX(");
+    let is_stdev = expr.starts_with("STDEV(");
+    let is_sum = expr.starts_with("SUM(");
+
+    // Range-based functions: SUM, AVG, MIN, MAX, STDEV
+    if is_avg || is_min || is_max || is_stdev || is_sum {
+        let prefix_len = if is_stdev { 6 } else { 4 };
+
+        if !expr.ends_with(')') {
+            return CommandStatus::CmdUnrecognized;
+        }
+
+        // Extract the range string without allocating extra memory.
+        let range_str = &expr[prefix_len..expr_len - 1];
+        let range = match parse_range(range_str) {
+            Ok(r) => r,
+            Err(status) => return status,
         };
+
+        // Set the formula code based on the function type.
+        cell.formula = if is_sum {
+            5
+        } else if is_avg {
+            6
+        } else if is_min {
+            7
+        } else if is_max {
+            8
+        } else {
+            9 // is_stdev case
+        };
+
+        cell.parent1 = get_key(range.start_row, range.start_col, sheet.cols);
+        cell.parent2 = get_key(range.end_row, range.end_col, sheet.cols);
+
+
+        // Evaluate the function.
+        if is_stdev {
+            eval_variance(sheet, cell, );
+        } else if is_max {
+            eval_max(sheet, cell, &range);
+        } else if is_min {
+            eval_min(sheet, cell);
+        } else if is_avg {
+            sum_value(sheet, cell);
+            let count = (range.end_row - range.start_row + 1) * (range.end_col - range.start_col + 1);
+            cell.value = cell.value / count;
+        } else {
+            sum_value(sheet, cell);
+        }
+        return CommandStatus::CmdOk;
     }
-    
-    // Try to parse as an arithmetic operation
-    if let Some(caps) = ARITHMETIC.captures(expr) {
-        let left = caps.get(1).unwrap().as_str();
-        let operator = caps.get(2).unwrap().as_str();
-        let right = caps.get(3).unwrap().as_str();
-        return eval_arithmetic(sheet, row, col, left, operator, right);
+
+    else if expr.starts_with("SLEEP(") {
+        if !expr.ends_with(')') {
+            return CommandStatus::CmdUnrecognized;
+        }
+
+        let sleep_str = &expr[6..expr_len - 1];
+        handle_sleep(sheet, cell, row, col, sleep_str, sleep_time);
     }
-    
-    // Try to parse as a cell reference
-    if let Some(caps) = CELL_REF.captures(expr) {
-        let cell_ref = caps.get(1).unwrap().as_str();
-        return eval_cell_reference(sheet, row, col, cell_ref);
-    }
-    
-    Err(CommandStatus::CmdUnrecognized)
+    CommandStatus::CmdOk
 }
 
 
 pub fn set_cell_value(sheet: &mut Spreadsheet, row: i16, col: i16, expr: &str, sleep_time: &mut f64) -> CommandStatus {
         let cell = sheet.get_mut_cell(row, col).unwrap();
-        let status = evaluate(sheet, cell, row, col, expr, sleep_time);
+        let status = evaluate_formula(sheet, cell, row, col, expr, sleep_time);
         status
 }

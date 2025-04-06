@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use regex::Regex;
 use lazy_static::lazy_static;
 
-use crate::cell::CellValue;
-use crate::spreadsheet::Spreadsheet;
+use crate::cell::{Cell, CellValue, parse_cell_reference};
+use crate::spreadsheet::{Spreadsheet, CommandStatus};
 
 // Evaluate a formula in the context of a cell
 pub fn evaluate(sheet: &mut Spreadsheet, row: usize, col: usize, formula: &str) -> Result<CellValue, String> {
@@ -36,7 +36,7 @@ fn has_circular_reference(
         let cell_ref = cap.get(1).unwrap().as_str();
         
         // Parse the cell reference
-        if let Ok((ref_row, ref_col)) = sheet.parse_cell_reference(cell_ref) {
+        if let Ok((ref_row, ref_col)) = parse_cell_reference(cell_ref) {
             // If we reference ourselves directly, that's a circular reference
             if ref_row == curr_row && ref_col == curr_col {
                 return true;
@@ -80,43 +80,51 @@ fn eval_cell_reference(sheet: &mut Spreadsheet, from_row: usize, from_col: usize
     sheet.get_cell_value(to_row, to_col)
 }
 
-// Evaluate a range of cells for functions
-fn get_range_values(sheet: &mut Spreadsheet, from_row: usize, from_col: usize, range_str: &str) -> Result<Vec<i32>, String> {
-    lazy_static! {
-        static ref RANGE: Regex = Regex::new(r"^([A-Z]+[0-9]+):([A-Z]+[0-9]+)$").unwrap();
+pub struct Range {
+    pub start_row: i16,
+    pub start_col: i16,
+    pub end_row: i16,
+    pub end_col: i16,
+}
+
+pub fn parse_range(range_str: &str) -> Result<Range, CommandStatus> {
+    // Find the colon in the range string.
+    let colon_index = range_str.find(':').ok_or(CommandStatus::CmdUnrecognized)?;
+    
+    // Ensure the colon is not the first character and that there is at least one character after.
+    if colon_index == 0 || colon_index + 1 >= range_str.len() {
+        return Err(CommandStatus::CmdUnrecognized);
     }
     
-    if let Some(caps) = RANGE.captures(range_str) {
-        let start_ref = caps.get(1).unwrap().as_str();
-        let end_ref = caps.get(2).unwrap().as_str();
-        
-        let (start_row, start_col) = sheet.parse_cell_reference(start_ref)?;
-        let (end_row, end_col) = sheet.parse_cell_reference(end_ref)?;
-        
-        // Ensure range is valid (start <= end)
-        if start_row > end_row || start_col > end_col {
-            return Err("Invalid range".to_string());
-        }
-        
-        let mut values = Vec::new();
-        
-        for r in start_row..=end_row {
-            for c in start_col..=end_col {
-                // Register dependency for each cell in the range
-                sheet.register_dependency(from_row, from_col, r, c);
-                
-                // Get cell value
-                match sheet.get_cell_value(r, c)?.as_int() {
-                    Ok(value) => values.push(value),
-                    Err(e) => return Err(e),
-                }
-            }
-        }
-        
-        Ok(values)
-    } else {
-        Err(format!("Invalid range: {}", range_str))
+    // Split the string into the start and end cell strings.
+    let start_cell = &range_str[..colon_index];
+    let end_cell = &range_str[colon_index + 1..];
+    
+    // Parse the start cell reference.
+    let (start_row, start_col) = parse_cell_reference(start_cell)
+        .map_err(|_| CommandStatus::CmdUnrecognized)?;
+    if start_row < 0 || start_col < 0 {
+        return Err(CommandStatus::CmdUnrecognized);
     }
+    
+    // Parse the end cell reference.
+    let (end_row, end_col) = parse_cell_reference(end_cell)
+        .map_err(|_| CommandStatus::CmdUnrecognized)?;
+    if end_row < 0 || end_col < 0 {
+        return Err(CommandStatus::CmdUnrecognized);
+    }
+    
+    // Ensure the range is valid.
+    if start_row > end_row || start_col > end_col {
+        return Err(CommandStatus::CmdUnrecognized);
+    }
+    
+    Ok(Range {
+        start_row,
+        start_col,
+        end_row,
+        end_col,
+    })
 }
 
 // Arithmetic operations
@@ -141,26 +149,50 @@ fn eval_arithmetic(sheet: &mut Spreadsheet, row: usize, col: usize, left: &str, 
 }
 
 // Aggregation functions
-fn eval_min(sheet: &mut Spreadsheet, row: usize, col: usize, range_str: &str) -> Result<CellValue, String> {
-    let values = get_range_values(sheet, row, col, range_str)?;
+pub fn eval_min(sheet: &mut Spreadsheet, cell: &mut Cell, range: &Range){
+    let mut min_value = i32::MAX;
     
-    if values.is_empty() {
-        return Err("Empty range".to_string());
+    // Iterate over each cell in the range.
+    for r in range.start_row..=range.end_row {
+        for c in range.start_col..=range.end_col {
+            // Retrieve the parent cell.
+            let parent_cell = sheet.get_cell(r, c);
+            // Extract the integer value; if it is not an integer, skip it.
+            if let CellValue::Integer(parent_value) = parent_cell.value {
+                min_value = std::cmp::min(min_value, parent_value);
+            }
+            else{
+                cell.value = CellValue::Error;
+                return;
+            }
+        }
     }
-    
-    let min_value = values.iter().min().cloned().unwrap();
-    Ok(CellValue::Integer(min_value))
+    // Set the computed minimum value in the target cell.
+    cell.value = CellValue::Integer(min_value);
 }
 
-fn eval_max(sheet: &mut Spreadsheet, row: usize, col: usize, range_str: &str) -> Result<CellValue, String> {
-    let values = get_range_values(sheet, row, col, range_str)?;
+pub fn eval_max(sheet: &mut Spreadsheet, cell: &mut Cell, range: &Range){
+    let mut max_value = i32::MIN;
     
-    if values.is_empty() {
-        return Err("Empty range".to_string());
+    // Iterate over each cell in the range.
+    for r in range.start_row..=range.end_row {
+        for c in range.start_col..=range.end_col {
+            // Retrieve the parent cell.
+            let parent_cell = sheet.get_cell(r, c);
+            
+            
+            // Extract the integer value; if it is not an integer, skip it.
+            if let CellValue::Integer(parent_value) = parent_cell.value {
+                max_value = std::cmp::max(max_value, parent_value);
+            }
+            else{
+                cell.value = CellValue::Error;
+                return;
+            }
+        }
     }
-    
-    let max_value = values.iter().max().cloned().unwrap();
-    Ok(CellValue::Integer(max_value))
+    // Set the computed minimum value in the target cell.
+    cell.value = CellValue::Integer(max_value);
 }
 
 fn eval_sum(sheet: &mut Spreadsheet, row: usize, col: usize, range_str: &str) -> Result<CellValue, String> {

@@ -16,8 +16,8 @@ pub enum CommandStatus {
 // Spreadsheet structure now uses a contiguous array for grid
 pub struct Spreadsheet {
     grid: Vec<Cell>,         // Vector of Cells (contiguous in memory)
-    rows: i16,
-    cols: i16,
+    pub rows: i16,
+    pub cols: i16,
     viewport_row: i16,
     viewport_col: i16,
     output_enabled: bool,
@@ -69,27 +69,14 @@ impl Spreadsheet {
         index - 1 // Convert from 1-based to 0-based
     }
 
-    pub fn get_cell(&self, row: i16, col: i16) -> Option<&Cell> {
-        if row < 0 || row >= self.rows || col < 0 || col >= self.cols {
-            return None;
-        }
-        
+    pub fn get_cell(&self, row: i16, col: i16) -> &Cell {
         let index = (row as usize) * (self.cols as usize) + (col as usize);
-        if index >= self.grid.len() {
-            return None;
-        }
-        
-        Some(&self.grid[index])
+        &self.grid[index]
     }
     
-    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> Option<&mut Cell> {
-        if row < 0 || row >= self.rows || col < 0 || col >= self.cols {
-            return None;
-        }
-        
+    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut Cell {
         let index = (row as usize) * (self.cols as usize) + (col as usize);
-        
-        Some(&mut self.grid[index])
+        &mut self.grid[index]
     }
 
     pub fn print_spreadsheet(&self){
@@ -113,14 +100,11 @@ impl Spreadsheet {
         for i in 0..display_row {
             print!("{:<4} ", start_row + i + 1); // Show 1-based row numbers
             for j in 0..display_col {
-                if let Some(cell) = self.get_cell(start_row + i, start_col + j) {
+                let cell = self.get_cell(start_row + i, start_col + j); 
                     match cell.value {
                         CellValue::Integer(value) => print!("{:<8} ", value),
                         CellValue::Error => print!("{:<8} ", "ERR"),
                     }
-                } else {
-                    print!("{:<8} ", "???"); // Indicate an access error
-                }
             }
             println!();
         }
