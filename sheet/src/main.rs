@@ -76,8 +76,12 @@ fn main() {
         if trimmed == "q" {
             break;
         }
+        
+        // Process the command and measure execution time
+        let start = Instant::now();
+        last_time = start.elapsed().as_secs_f64();
     
-        // Update last_status based on the current command status.
+        // Update last_status based on the current command status
         last_status = match status {
             CommandStatus::CmdOk => "ok",
             CommandStatus::CmdUnrecognized => "unrecognized cmd",

@@ -82,6 +82,16 @@ impl Spreadsheet {
         Some(&self.grid[index])
     }
     
+    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> Option<&mut Cell> {
+        if row < 0 || row >= self.rows || col < 0 || col >= self.cols {
+            return None;
+        }
+        
+        let index = (row as usize) * (self.cols as usize) + (col as usize);
+        
+        Some(&mut self.grid[index])
+    }
+
     pub fn print_spreadsheet(&self){
         if !self.output_enabled {
             return;
@@ -115,5 +125,4 @@ impl Spreadsheet {
             println!();
         }
     }
-    
 }
