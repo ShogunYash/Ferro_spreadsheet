@@ -82,19 +82,6 @@ impl Spreadsheet {
         Some(&self.grid[index])
     }
     
-    pub fn get_cell_mut(&mut self, row: i16, col: i16) -> Option<&mut Cell> {
-        if row < 0 || row >= self.rows || col < 0 || col >= self.cols {
-            return None;
-        }
-        
-        let index = (row as usize) * (self.cols as usize) + (col as usize);
-        if index >= self.grid.len() {
-            return None;
-        }
-        
-        self.grid.get_mut(index)
-    }
-    
     pub fn print_spreadsheet(&self){
         if !self.output_enabled {
             return;
@@ -106,7 +93,7 @@ impl Spreadsheet {
         let display_col = min(self.cols - start_col, 10);
         
         // Print column headers
-        print!("    ");
+        print!("     ");
         for i in 0..display_col {
             print!("{:<8} ", self.get_column_name(start_col + i));
         }
@@ -129,20 +116,4 @@ impl Spreadsheet {
         }
     }
     
-    // Add these methods to make the code compatible with ui.rs
-    pub fn get_view_row(&self) -> usize {
-        self.viewport_row as usize
-    }
-    
-    pub fn get_view_col(&self) -> usize {
-        self.viewport_col as usize
-    }
-    
-    pub fn get_rows(&self) -> usize {
-        self.rows as usize
-    }
-    
-    pub fn get_cols(&self) -> usize {
-        self.cols as usize
-    }
 }
