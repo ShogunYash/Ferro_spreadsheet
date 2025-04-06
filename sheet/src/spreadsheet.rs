@@ -181,4 +181,36 @@ impl Spreadsheet {
                 _ => {} // Invalid direction, do nothing
             }
     }
+
+    pub fn handle_command (&mut self, cmd: &str, sleep_time: &mut f64) ->CommandStatus {
+        if cmd == "disable_output" {
+            self.output_enabled = false;
+            return CommandStatus::CmdOk;
+        } else if cmd == "enable_output" {
+            self.output_enabled = true;
+            return CommandStatus::CmdOk;
+        } else if cmd.len() == 1 && "wasd".contains(cmd) {
+            self.scroll_viewport(cmd.chars().next().unwrap());
+            return CommandStatus::CmdOk;
+        } else if cmd.starts_with("scroll_to ") {
+            let cell_ref = &cmd[10..];
+            return self.scroll_to_cell(cell_ref);
+        } else if let Some(eq_pos) = cmd.find('=') {
+            let cell_ref = &cmd[..eq_pos];
+            let expr = &cmd[eq_pos + 1..];
+            let dummy_cell = Cell::new();
+            match dummy_cell.parse_cell_reference(self, cell_ref) {
+                Ok((row, col)) => {
+                        if row < 0 || row >= self.rows || col < 0 || col >= self.cols {
+                            return CommandStatus::CmdInvalidCell;
+                        }
+                        return set_cell_value(self, row, col, expr, sleep_time);
+                    }
+                Err(_) => {
+                    return CommandStatus::CmdUnrecognized;
+                }
+            }
+        } 
+        return CommandStatus::CmdUnrecognized;
+    }
 }
