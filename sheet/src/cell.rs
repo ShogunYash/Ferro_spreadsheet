@@ -1,7 +1,7 @@
 use crate::spreadsheet::{Spreadsheet, CommandStatus}; // Importing Spreadsheet and CommandStatus from spreadsheet module
 
 // Cell value representation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CellValue {
     Integer(i32),
     Error,

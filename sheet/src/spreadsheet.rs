@@ -11,6 +11,7 @@ pub enum CommandStatus {
     CmdOk,
     CmdUnrecognized,
     CmdCircularRef,
+    CmdInvalidCell,
 }
 
 // Spreadsheet structure now uses a contiguous array for grid
@@ -130,5 +131,92 @@ impl Spreadsheet {
             }
             println!();
         }
+    }
+
+    pub fn scroll_to_cell(&mut self, cell: &str) -> CommandStatus {
+        let dummy_cell = Cell::new();
+        match dummy_cell.parse_cell_reference(self, cell) {
+            Ok((row, col)) => {
+                if row>=0 && row < self.rows && col >= 0 && col < self.cols {
+                    self.viewport_row = row;
+                    self.viewport_col = col;
+                    return CommandStatus::CmdOk;
+                } else {
+                    return CommandStatus::CmdInvalidCell;
+                }
+            }
+            Err(_) => {
+                return CommandStatus::CmdUnrecognized;
+            }
+        }
+    }
+
+
+    pub fn scroll_viewport(&mut self, direction: char) {
+        const VIEWPORT_SIZE: i16 = 10;
+            match direction {
+                'w'=> {
+                    self.viewport_row = if self.viewport_row > 10 {
+                        self.viewport_row - 10
+                    } else {
+                        0
+                    };
+                }
+                's'=> {
+                    if self.viewport_row + VIEWPORT_SIZE < self.rows {
+                        self.viewport_row += 10;
+                    } else {
+                        self.viewport_row = self.rows - VIEWPORT_SIZE;
+                    }
+                }
+                'a'=> {
+                    self.viewport_col = if self.viewport_col > 10 {
+                        self.viewport_col - 10
+                    } else {
+                        0
+                    };
+                }
+
+                'd'=> {
+                    if self.viewport_col + VIEWPORT_SIZE < self.cols {
+                        self.viewport_col += 10;
+                    } else {
+                        self.viewport_col = self.cols - VIEWPORT_SIZE;
+                    }
+                }
+                _ => {} // Invalid direction, do nothing
+            }
+    }
+
+    pub fn handle_command (&mut self, cmd: &str, sleep_time: &mut f64) ->CommandStatus {
+        if cmd == "disable_output" {
+            self.output_enabled = false;
+            return CommandStatus::CmdOk;
+        } else if cmd == "enable_output" {
+            self.output_enabled = true;
+            return CommandStatus::CmdOk;
+        } else if cmd.len() == 1 && "wasd".contains(cmd) {
+            self.scroll_viewport(cmd.chars().next().unwrap());
+            return CommandStatus::CmdOk;
+        } else if cmd.starts_with("scroll_to ") {
+            let cell_ref = &cmd[10..];
+            return self.scroll_to_cell(cell_ref);
+        } else if let Some(eq_pos) = cmd.find('=') {
+            let cell_ref = &cmd[..eq_pos];
+            let expr = &cmd[eq_pos + 1..];
+            let dummy_cell = Cell::new();
+            match dummy_cell.parse_cell_reference(self, cell_ref) {
+                Ok((row, col)) => {
+                        if row < 0 || row >= self.rows || col < 0 || col >= self.cols {
+                            return CommandStatus::CmdInvalidCell;
+                        }
+                        return set_cell_value(self, row, col, expr, sleep_time);
+                    }
+                Err(_) => {
+                    return CommandStatus::CmdUnrecognized;
+                }
+            }
+        } 
+        return CommandStatus::CmdUnrecognized;
     }
 }
