@@ -29,8 +29,6 @@ impl Cell {
 }
 
 pub fn parse_cell_reference(sheet: &Spreadsheet, cell_ref: &str) -> Result<(i16, i16), CommandStatus> {
-    eprintln!("DEBUG: Parsing cell reference: '{}'", cell_ref);
-    
     // Extract column letters
     let mut i = 0;
     let mut col_name = String::new();
@@ -38,7 +36,6 @@ pub fn parse_cell_reference(sheet: &Spreadsheet, cell_ref: &str) -> Result<(i16,
     for c in cell_ref.chars() {
         if c.is_ascii_uppercase() {
             if i >= 3 {
-                eprintln!("DEBUG: Too many column letters (max 3)");
                 return Err(CommandStatus::CmdUnrecognized);
             }
             col_name.push(c);
@@ -48,26 +45,23 @@ pub fn parse_cell_reference(sheet: &Spreadsheet, cell_ref: &str) -> Result<(i16,
         }
     }
     
-    eprintln!("DEBUG: Extracted column name: '{}'", col_name);
     
     // Make sure we have at least one letter and digits follow
     if col_name.is_empty() || i >= cell_ref.len() {
-        eprintln!("DEBUG: Invalid format - no column letter or missing row number");
+     
         return Err(CommandStatus::CmdUnrecognized);
     }
     
     // Extract row number
     let row_str = &cell_ref[i..];
-    eprintln!("DEBUG: Extracted row string: '{}'", row_str);
     
     if row_str.is_empty() {
-        eprintln!("DEBUG: Row string is empty");
         return Err(CommandStatus::CmdUnrecognized);
     }
     
     // Validate that all remaining characters are digits
     if !row_str.chars().all(|c| c.is_ascii_digit()) {
-        eprintln!("DEBUG: Row contains non-digit characters");
+       
         return Err(CommandStatus::CmdUnrecognized);
     }
     
@@ -75,14 +69,13 @@ pub fn parse_cell_reference(sheet: &Spreadsheet, cell_ref: &str) -> Result<(i16,
     let row = match row_str.parse::<i16>() {
         Ok(r) => r - 1,
         Err(e) => {
-            eprintln!("DEBUG: Failed to parse row number: {}", e);
+        
             return Err(CommandStatus::CmdUnrecognized);
         }
     };
     
     // Convert column name to column index
     let col = sheet.column_name_to_index(&col_name);
-    
-    eprintln!("DEBUG: Successfully parsed cell: row={}, col={} ({})", row, col, col_name);
+  
     Ok((row, col))
 }

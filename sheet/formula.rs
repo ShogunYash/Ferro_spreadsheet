@@ -217,30 +217,6 @@ impl Spreadsheet {
     }
 }
 
-// Remove or comment out the functions that are causing errors
-// These functions are not directly used by evaluator.rs
-
-/*
-// Evaluate a formula in the context of a cell
-pub fn evaluate(sheet: &mut Spreadsheet, row: usize, col: usize, formula: &str) -> Result<CellValue, String> {
-    // Implementation removed to fix errors
-    unimplemented!()
-}
-
-// Check if a formula would create a circular reference
-fn has_circular_reference(
-    sheet: &Spreadsheet,
-    curr_row: usize, 
-    curr_col: usize, 
-    formula: &str, 
-    visited: &mut HashSet<(usize, usize)>
-) -> bool {
-    // Implementation removed to fix errors
-    false
-}
-
-
-*/
 
 // Keep the Range struct and parse_range function
 pub struct Range {
