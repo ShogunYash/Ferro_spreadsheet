@@ -1,6 +1,6 @@
 use std::cmp::min;
 // Spreadsheet implementation
-use crate::cell::{Cell, CellValue}; 
+use crate::cell::{parse_cell_reference, Cell, CellValue}; 
 
 // Constants
 const MAX_ROWS: i16 = 999;    // Example value, adjust as needed
@@ -12,6 +12,8 @@ pub enum CommandStatus {
     CmdUnrecognized,
     CmdCircularRef,
     CmdInvalidCell,
+    CmdInvalidRange,
+    CmdRangeerror,
 }
 
 // Spreadsheet structure now uses a contiguous array for grid
@@ -21,7 +23,7 @@ pub struct Spreadsheet {
     pub cols: i16,
     viewport_row: i16,
     viewport_col: i16,
-    output_enabled: bool,
+    pub output_enabled: bool,
 }
 
 impl Spreadsheet {
@@ -47,7 +49,7 @@ impl Spreadsheet {
             cols,
             viewport_row: 0,
             viewport_col: 0,
-            output_enabled: true,
+             output_enabled: true,
         })
     }
 
@@ -83,14 +85,11 @@ impl Spreadsheet {
         Some(&self.grid[index])
     }
     
-    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> Option<&mut Cell> {
-        if row < 0 || row >= self.rows || col < 0 || col >= self.cols {
-            return None;
-        }
+    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut Cell {
         
         let index = (row as usize) * (self.cols as usize) + (col as usize);
         
-        Some(&mut self.grid[index])
+        &mut self.grid[index]
     }
 
     pub fn print_spreadsheet(&self){
@@ -128,8 +127,8 @@ impl Spreadsheet {
     }
 
     pub fn scroll_to_cell(&mut self, cell: &str) -> CommandStatus {
-        let dummy_cell = Cell::new();
-        match dummy_cell.parse_cell_reference(self, cell) {
+        
+        match parse_cell_reference(self, cell) {
             Ok((row, col)) => {
                 if row>=0 && row < self.rows && col >= 0 && col < self.cols {
                     self.viewport_row = row;
