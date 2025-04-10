@@ -5,6 +5,8 @@ use crate::cell::{Cell, CellValue, parse_cell_reference};
 use crate::formula::parse_range;
 use crate::formula::Range;
 use crate::formula::{eval_max, eval_min, sum_value, eval_variance};
+use crate::graph::{add_children, remove_all_parents, detect_cycle_range};
+
 
 pub fn get_key(row: i16, col: i16, cols: i16) -> i32 {
     ((row as i32 )* (cols as i32) + (col as i32)) as i32
@@ -27,172 +29,111 @@ pub fn handle_sleep(
     // Handle cell reference case
     if let Ok((target_row, target_col)) = parse_cell_reference(sheet, expr) {
         // Check if the referenced cell exists and get its value
-        if let Some(ref_cell) = sheet.get_cell(target_row, target_col) {
+        if let Some(parent_cell) = sheet.get_cell(target_row, target_col) {
+            // Add parent to the cell
+
             // Store the value before mutable borrow
-            let value = ref_cell.value.clone();
+            let value = parent_cell.value.clone();
             
             // Now get our target cell for mutation
             let cell = sheet.get_mut_cell(row, col);
-            cell.formula = 102;    // Custom formula code for sleep
+            //storing the old parents and formula in case of circular ref
+            let old_parent1 = cell.parent1;
+            let old_parent2 = cell.parent2;
+            let old_formula = cell.formula;
+            remove_all_parents(sheet, row, col); 
+            // Set the formula code for sleep
             cell.parent1 = pkey;   // Store the current cell key
             cell.parent2 = -1;     // No second parent for sleep
+            cell.formula = 102;    // Custom formula code for sleep
             cell.value = value.clone();    // Set the value we stored earlier
             
+            // Check for circular reference
+            if detect_cycle(sheet, pkey, -1, 102, get_key(row, col, cols)) {
+                cell.parent1 = old_parent1;
+                cell.parent2 = old_parent2;
+                cell.formula = old_formula;
+                add_children(sheet, old_parent1, old_parent2, old_formula, row, col);
+                return CommandStatus::CmdCircularRef;
+            }
+
+            // Now add current cell as a child to the parent cell
+            add_children(sheet, pkey, -1, 102, row, col);
             // Add to sleep time if integer
             if let CellValue::Integer(val) = value {
                 *sleep_time += val as f64;
-            } else {
-                cell.value = CellValue::Error;
             }
         } else {
             // Referenced cell doesn't exist
-            let cell = sheet.get_mut_cell(row, col);
-            cell.value = CellValue::Error;
             return CommandStatus::CmdInvalidCell;
         }
     } 
     // Handle numeric literal case
     else if let Ok(val) = expr.parse::<i32>() {
         let cell = sheet.get_mut_cell(row, col);
+        // Remove all the parents
+        remove_all_parents(sheet, row, col);
         cell.value = CellValue::Integer(val);
-        *sleep_time += val as f64;
         cell.formula = -1;
         cell.parent1 = -1;
         cell.parent2 = -1;
+        *sleep_time += val as f64;
     }
     else {
         return CommandStatus::CmdUnrecognized;
     }
-
     CommandStatus::CmdOk
 }
-pub fn evaluate_formula(
+
+pub fn evaluate_arithmetic(
     sheet: &mut Spreadsheet,
     row: i16,
     col: i16,
     expr: &str,
-    sleep_time: &mut f64,
 ) -> CommandStatus {
-    let expr_len = expr.len();
-    if expr_len == 0 {
-        return CommandStatus::CmdUnrecognized;
-    }
-    let cols = sheet.cols;
 
-    let is_avg = expr.starts_with("AVG(");
-    let is_min = expr.starts_with("MIN(");
-    let is_max = expr.starts_with("MAX(");
-    let is_stdev = expr.starts_with("STDEV(");
-    let is_sum = expr.starts_with("SUM(");
-
-    // Range-based functions: SUM, AVG, MIN, MAX, STDEV
-    if is_avg || is_min || is_max || is_stdev || is_sum {
-        let prefix_len = if is_stdev { 6 } else { 4 };
-
-        if !expr.ends_with(')') {
-            return CommandStatus::CmdUnrecognized;
-        }
-
-        // Extract the range string without allocating extra memory.
-        let range_str = &expr[prefix_len..expr_len - 1];
-        let range = match parse_range(sheet,range_str) {
-            Ok(r) => r,
-            Err(status) => return status,
-        };
-        //storing the old parents and formula in case of circular ref
-        let old_parent1 = cell.parent1;
-        let old_parent2 = cell.parent2;
-        let old_formula = cell.formula;
-        remove_all_parents(sheet, row, col); 
-        let cell = sheet.get_mut_cell(row, col);
-        // Set the formula code based on the function type.
-        cell.formula = if is_sum {
-            5
-        } else if is_avg {
-            6
-        } else if is_min {
-            7
-        } else if is_max {
-            8
-        } else {
-            9 // is_stdev case
-        };
-
-
-        cell.parent1 = get_key(range.start_row, range.start_col, cols);
-        cell.parent2 = get_key(range.end_row, range.end_col, cols);
-
-        // Evaluate the function.
-        if detect_cycle_range(sheet,range.start_row, range.start_col, range.end_row, range.end_col) {
-            cell.parent1 = old_parent1;
-            cell.parent2 = old_parent2;
-            cell.formula = old_formula;
-            add_children(sheet,old_parent1, old_parent2,old_formula,row,col);
-            return CommandStatus::CmdCircularRef;
-        }
-        add_children(sheet,cell.parent1, cell.parent2,cell.formula,row,col);
-
-        if is_stdev {
-            return eval_variance(sheet,row,col, &range);
-        } else if is_max {
-            return eval_max(sheet, row,col, &range);
-        } else if is_min {
-            return eval_min(sheet, row,col, &range);
-        
-        } else if is_avg {
-            let status = sum_value(sheet, row,col, &range);
-            if status != CommandStatus::CmdOk {
-                return status;
-            }
-            
-            let count  =( (range.end_row - range.start_row + 1) * (range.end_col - range.start_col + 1) )as i32;
-            let cell = sheet.get_mut_cell(row, col);
-            if let CellValue::Integer(sum) = cell.value {
-                cell.value = CellValue::Integer(sum / count);
-            } else {
-                cell.value = CellValue::Error;
-            }
-            return CommandStatus::CmdOk;
-        } else {
-            return sum_value(sheet,row,col, &range);
-        }
-    } else if expr.starts_with("SLEEP(") {
-        if !expr.ends_with(')') {
-            return CommandStatus::CmdUnrecognized;
-        }
-
-        let sleep_str = &expr[6..expr_len - 1];
-        return handle_sleep(sheet, row, col, sleep_str, sleep_time);
-    }
     if let Ok(number) = expr.parse::<i32>() {
         let cell = sheet.get_mut_cell(row, col);
+        // Remove all the parents
+        remove_all_parents(sheet, row, col);
         cell.value = CellValue::Integer(number);
         cell.formula = -1;
+        cell.parent1 = -1;
+        cell.parent2 = -1;
         return CommandStatus::CmdOk;
     }
     //if the expr is fully alphanumeric parse the cell reference
     if expr.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        let cell_ref = expr;
-        match parse_cell_reference(sheet, cell_ref) {
+        match parse_cell_reference(sheet, expr) {
             Ok((target_row, target_col)) => {
-                // Check if the referenced cell exists and get its value
-                if let Some(ref_cell) = sheet.get_cell(target_row, target_col) {
-                    // Store the value before mutable borrow
-                    let value = ref_cell.value.clone();
-                        
-                    
-                    // Now get our target cell for mutation
-                    let cell = sheet.get_mut_cell(row, col);
-                    cell.formula = 82;    // Custom formula code for reference
-                    cell.parent1 = get_key(target_row, target_col, cols);   // Store the current cell key
-                    cell.parent2 = -1;     // No second parent for reference
-                    cell.value = value.clone();    // Set the value we stored earlier
-                } else {
-                    // Referenced cell doesn't exist
-                    let cell = sheet.get_mut_cell(row, col);
-                    cell.value = CellValue::Error;
-                    return CommandStatus::CmdInvalidCell;
+                // Get parent cell mutable
+                let parent_cell = sheet.get_mut_cell(target_row, target_col);
+
+                // Store the value before mutable borrow
+                let value = parent_cell.value.clone();
+                // Now get our target cell for mutation
+                let cell = sheet.get_mut_cell(row, col);
+                // Store the old parents and formula in case of circular ref
+                let old_parent1 = cell.parent1;
+                let old_parent2 = cell.parent2;
+                let old_formula = cell.formula;
+                remove_all_parents(sheet, row, col);
+                // Set the formula code for reference
+                cell.parent1 = get_key(target_row, target_col, cols);   // Store the current cell key
+                cell.parent2 = -1;     // No second parent for reference
+                cell.formula = 82;    // Custom formula code for reference
+                
+                // Check for circular reference
+                if detect_cycle_range(sheet, target_row, target_col, row, col) {
+                    cell.parent1 = old_parent1;
+                    cell.parent2 = old_parent2;
+                    cell.formula = old_formula;
+                    add_children(sheet, old_parent1, old_parent2, old_formula, row, col);
+                    return CommandStatus::CmdCircularRef;
                 }
+                cell.value = parent_cell.value.clone();    // Set the value we stored earlier
+                // Now add current cell as a child to the parent cell
+                add_children(sheet, cell.parent1, -1, 82, row, col);
             },
             Err(status) => {
                 return status;
@@ -205,13 +146,12 @@ pub fn evaluate_formula(
     for op_idx in 2..expr.len() {
             let c = expr.chars().nth(op_idx).unwrap();
             
-            if c == '+' || c == '-' {
-    
+            if c == '+' || c == '-' || c == '*' || c == '/' {
+                // Split the expression into left and right parts
                 let left = &expr[..op_idx].trim();
                 let right = &expr[op_idx+1..].trim();
 
                 if !left.is_empty() && !right.is_empty() {
-                    
                     let left_status = parse_cell_reference(sheet, left);
                     if left_status.is_err() {
                         return left_status.err().unwrap();
@@ -267,10 +207,112 @@ pub fn evaluate_formula(
                      // Code for binary operation
                     return CommandStatus::CmdOk;
                 }
-            
         }
     }
-    
+}
+pub fn evaluate_formula(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    expr: &str,
+    sleep_time: &mut f64,
+) -> CommandStatus {
+    let expr_len = expr.len();
+    if expr_len == 0 {
+        return CommandStatus::CmdUnrecognized;
+    }
+    let cols = sheet.cols;
+
+    let is_avg = expr.starts_with("AVG(");
+    let is_min = expr.starts_with("MIN(");
+    let is_max = expr.starts_with("MAX(");
+    let is_stdev = expr.starts_with("STDEV(");
+    let is_sum = expr.starts_with("SUM(");
+
+    // Range-based functions: SUM, AVG, MIN, MAX, STDEV
+    if is_avg || is_min || is_max || is_stdev || is_sum {
+        let prefix_len = if is_stdev { 6 } else { 4 };
+
+        if !expr.ends_with(')') {
+            return CommandStatus::CmdUnrecognized;
+        }
+
+        // Extract the range string without allocating extra memory.
+        let range_str = &expr[prefix_len..expr_len - 1];
+        let range = match parse_range(sheet,range_str) {
+            Ok(r) => r,
+            Err(status) => return status,
+        };
+
+        let cell = sheet.get_mut_cell(row, col);
+        //storing the old parents and formula in case of circular ref
+        let old_parent1 = cell.parent1;
+        let old_parent2 = cell.parent2;
+        let old_formula = cell.formula;
+        remove_all_parents(sheet, row, col); 
+        // Set the parent keys based on the range.
+        cell.parent1 = get_key(range.start_row, range.start_col, cols);
+        cell.parent2 = get_key(range.end_row, range.end_col, cols);
+        // Set the formula code based on the function type.
+        cell.formula = if is_sum {
+            5
+        } else if is_avg {
+            6
+        } else if is_min {
+            7
+        } else if is_max {
+            8
+        } else {
+            9 // is_stdev case
+        };
+
+        // Evaluate the function.
+        if detect_cycle(sheet, cell.parent1, cell.parent2, cell.formula, get_key(row, col, cols)) {
+            // If a cycle is detected, restore the old parents and formula
+            cell.parent1 = old_parent1;
+            cell.parent2 = old_parent2;
+            cell.formula = old_formula;
+            add_children(sheet, old_parent1, old_parent2, old_formula, row, col);
+            return CommandStatus::CmdCircularRef;
+        }
+
+        // Now add current cell as a child to the range cells
+        add_children(sheet, cell.parent1, cell.parent2, cell.formula, row, col);
+
+        if is_stdev {
+            return eval_variance(sheet,row,col, &range);
+        } else if is_max {
+            return eval_max(sheet, row,col, &range);
+        } else if is_min {
+            return eval_min(sheet, row,col, &range);
+        } else if is_avg {
+            let status = sum_value(sheet, row,col, &range);
+            if status != CommandStatus::CmdOk {
+                return status;
+            }
+            
+            let count  =( (range.end_row - range.start_row + 1) * (range.end_col - range.start_col + 1) )as i32;
+            let cell = sheet.get_mut_cell(row, col);
+            if let CellValue::Integer(sum) = cell.value {
+                cell.value = CellValue::Integer(sum / count);
+            } else {
+                cell.value = CellValue::Error;
+            }
+            return CommandStatus::CmdOk;
+        } else {
+            return sum_value(sheet,row,col, &range);
+        }
+    } else if expr.starts_with("SLEEP(") {
+        if !expr.ends_with(')') {
+            return CommandStatus::CmdUnrecognized;
+        }
+
+        let sleep_str = &expr[6..expr_len - 1];
+        return handle_sleep(sheet, row, col, sleep_str, sleep_time);
+    }
+    else{
+        return evaluate_arithmetic(sheet, row, col, expr);
+    }
     CommandStatus::CmdUnrecognized
 }
 
@@ -280,6 +322,7 @@ pub fn set_cell_value(sheet: &mut Spreadsheet, row: i16, col: i16, expr: &str, s
         
         status
 }
+
 pub fn handle_command(
     sheet: &mut Spreadsheet,
     input: String,
@@ -328,77 +371,4 @@ pub fn handle_command(
     }
     
     CommandStatus::CmdUnrecognized
-}
-pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
-let key = get_key(row, col, sheet.cols);
-let child = get_cell_from_key(sheet, key);
-if (child.formula == -1){
-    return;
-}
-let rem = (child.formula%10) as i16;
-if (child.formula<=9 && child.formula >=5){//is a range struct really required
-    let start_row = child.parent1/sheet.cols;
-    let start_col = child.parent1%sheet.cols;
-    let end_row = child.parent2/sheet.cols; 
-    let end_col = child.parent2%sheet.cols;
-    for i in start_row..=end_row {
-        for j in start_col..=end_col {
-            if let Some(ref_cell) = sheet.get_cell(i,j){
-                remove_child(ref_cell, key);
-            }
-        return Err (CommandStatus::CmdInvalidCell);
-        }
-}
-
-}
-else if rem==0 {
-    let ref_cell1 = sheet.get_cell(child.parent1/sheet.cols, child.parent1%sheet.cols);
-    let ref_cell2 = sheet.get_cell(child.parent2/sheet.cols, child.parent2%sheet.cols);
-    if let Some(ref_cell1) = ref_cell1 {
-        remove_child(ref_cell1, key);
-    }
-    if let Some(ref_cell2) = ref_cell2 {
-        remove_child(ref_cell2, key);
-    }
-return Err (CommandStatus::CmdInvalidCell);
-}
-else if rem==2 {
-    let ref_cell1 = sheet.get_cell(child.parent1/sheet.cols, child.parent1%sheet.cols);
-    if let Some(ref_cell1) = ref_cell1 {
-        remove_child(ref_cell1, key);
-    }
-    return Err (CommandStatus::CmdInvalidCell);
-}
-else if rem==3{
-    let ref_cell2 = sheet.get_cell(child.parent2/sheet.cols, child.parent2%sheet.cols);
-    if let Some(ref_cell1) = ref_cell1 {
-        remove_child(ref_cell1, key);
-    }
-    return Err (CommandStatus::CmdInvalidCell);
-}
-
-}
-pub fn remove_child(parent: &Cell, key: i32) {
-    parent.children.remove_child(key);
-}
-
-pub fn add_children(sheet:&Spreadsheet,cell1: i32, cell2:i32 , formula:i16 , row :i16, col:i16)   {
-    let rem = formula %10 as i16;
-    if formula== -1 {
-        return;
-    }   
-    if rem ==0{
-        let ref_cell1 = get_cell_from_key(sheet , cell1);
-        let ref_cell2= get_cell_from_key(sheet,cell2);
-        let cols=sheet.cols;
-        add_child(ref_cell1, row, col, cols);
-    }
-    if rem ==
-
-
-}
-pub fn add_child(parent: &Cell, row: i16, col:i16, cols:i16){
-    let key = get_key(row, col, cols);
-    parent.children.prepend(key);
-
 }
