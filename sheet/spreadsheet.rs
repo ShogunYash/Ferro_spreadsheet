@@ -18,7 +18,7 @@ pub enum CommandStatus {
 
 // Spreadsheet structure now uses a contiguous array for grid
 pub struct Spreadsheet {
-    grid: Vec<Cell>,         // Vector of Cells (contiguous in memory)
+    pub grid: Vec<Cell>,         // Vector of Cells (contiguous in memory)
     pub rows: i16,
     pub cols: i16,
     viewport_row: i16,

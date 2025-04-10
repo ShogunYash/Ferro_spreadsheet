@@ -1,6 +1,5 @@
 // linked_list.rs
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
     pub key: i32,
     pub next: Option<Box<Node>>,
@@ -43,18 +42,21 @@ impl Node {
                 *head = node.next.take();
                 return true;
             }
-            
+    
             let mut current = node;
-            while let Some(ref mut next) = current.next {
-                if next.key == key {
-                    current.next = next.next.take();
+            while let Some(mut next_node) = current.next.take() {
+                if next_node.key == key {
+                    current.next = next_node.next.take();
                     return true;
+                } else {
+                    current.next = Some(next_node); // re-attach the node if not removed
+                    current = current.next.as_mut().unwrap(); // safe unwrap since we just put it back
                 }
-                current = next;
             }
         }
         false
     }
+    
 
     // Check if a key exists in the list
     pub fn contains(head: &Option<Box<Node>>, key: i32) -> bool {

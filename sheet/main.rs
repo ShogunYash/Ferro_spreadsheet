@@ -2,6 +2,7 @@ mod cell;
 mod spreadsheet;
 mod evaluator;
 mod formula;
+mod linked_list;
 use std::env;
 use std::io::{self, Write};
 use std::process;

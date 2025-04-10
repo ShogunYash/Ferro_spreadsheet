@@ -1,5 +1,5 @@
 use std::clone;
-
+use crate::graph::detect_cycle;
 use crate::spreadsheet::{Spreadsheet, CommandStatus};
 use crate::cell::{Cell, CellValue, parse_cell_reference};
 use crate::formula::parse_range;
@@ -89,6 +89,7 @@ pub fn evaluate_arithmetic(
     sheet: &mut Spreadsheet,
     row: i16,
     col: i16,
+    cols: i16,
     expr: &str,
 ) -> CommandStatus {
 
@@ -209,6 +210,9 @@ pub fn evaluate_arithmetic(
                 }
         }
     }
+    let cell = sheet.get_mut_cell(row, col);
+    cell.value = CellValue::Error; // Invalid expression
+    return CommandStatus::CmdOk;
 }
 pub fn evaluate_formula(
     sheet: &mut Spreadsheet,
@@ -311,7 +315,7 @@ pub fn evaluate_formula(
         return handle_sleep(sheet, row, col, sleep_str, sleep_time);
     }
     else{
-        return evaluate_arithmetic(sheet, row, col, expr);
+        return evaluate_arithmetic(sheet, row, col, cols, expr);
     }
     CommandStatus::CmdUnrecognized
 }

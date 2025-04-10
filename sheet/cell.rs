@@ -26,7 +26,8 @@ impl Cell {
             parent1: -1,
             parent2: -1,
             value: CellValue::Integer(0),
-            formula: -1,  
+            formula: -1, 
+            children: Node { key: -1, next: None }, 
         }
     }
 }
