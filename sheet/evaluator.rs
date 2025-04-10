@@ -9,6 +9,9 @@ use crate::formula::{eval_max, eval_min, sum_value, eval_variance};
 pub fn get_key(row: i16, col: i16, cols: i16) -> i32 {
     ((row as i32 )* (cols as i32) + (col as i32)) as i32
 }
+pub fn get_cell_from_key (spreadsheet:&Spreadsheet, key:i32) -> &Cell {
+    return &spreadsheet.grid[key as usize];
+}
 
 pub fn handle_sleep(
     sheet: &mut Spreadsheet,
@@ -96,7 +99,11 @@ pub fn evaluate_formula(
             Ok(r) => r,
             Err(status) => return status,
         };
-
+        //storing the old parents and formula in case of circular ref
+        let old_parent1 = cell.parent1;
+        let old_parent2 = cell.parent2;
+        let old_formula = cell.formula;
+        remove_all_parents(sheet, row, col); 
         let cell = sheet.get_mut_cell(row, col);
         // Set the formula code based on the function type.
         cell.formula = if is_sum {
@@ -111,10 +118,19 @@ pub fn evaluate_formula(
             9 // is_stdev case
         };
 
+
         cell.parent1 = get_key(range.start_row, range.start_col, cols);
         cell.parent2 = get_key(range.end_row, range.end_col, cols);
 
         // Evaluate the function.
+        if detect_cycle_range(sheet,range.start_row, range.start_col, range.end_row, range.end_col) {
+            cell.parent1 = old_parent1;
+            cell.parent2 = old_parent2;
+            cell.formula = old_formula;
+            add_children(sheet,old_parent1, old_parent2,old_formula,row,col);
+            return CommandStatus::CmdCircularRef;
+        }
+        add_children(sheet,cell.parent1, cell.parent2,cell.formula,row,col);
 
         if is_stdev {
             return eval_variance(sheet,row,col, &range);
@@ -186,25 +202,20 @@ pub fn evaluate_formula(
     }
 
     // Binary arithmetic expression handling
-    // Find operators +, -, *, / with proper precedence
-    // Need to account for nested expressions and operator precedence
     for op_idx in 2..expr.len() {
-        // Skip first character to not confuse leading minus with subtraction
-        
             let c = expr.chars().nth(op_idx).unwrap();
             
             if c == '+' || c == '-' {
-                // Only treat as operator if not inside parentheses
+    
                 let left = &expr[..op_idx].trim();
                 let right = &expr[op_idx+1..].trim();
 
                 if !left.is_empty() && !right.is_empty() {
-                    // Evaluate left and right expressions recursively
+                    
                     let left_status = parse_cell_reference(sheet, left);
                     if left_status.is_err() {
                         return left_status.err().unwrap();
                     }
-                    // Save the left result and clear the cell for right evaluation
                     let (rowl, coll) = left_status.unwrap();
                     let left_cell = sheet.get_cell(rowl, coll).unwrap();
                     let left_value = if let CellValue::Integer(val) = left_cell.value {
@@ -317,4 +328,77 @@ pub fn handle_command(
     }
     
     CommandStatus::CmdUnrecognized
+}
+pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
+let key = get_key(row, col, sheet.cols);
+let child = get_cell_from_key(sheet, key);
+if (child.formula == -1){
+    return;
+}
+let rem = (child.formula%10) as i16;
+if (child.formula<=9 && child.formula >=5){//is a range struct really required
+    let start_row = child.parent1/sheet.cols;
+    let start_col = child.parent1%sheet.cols;
+    let end_row = child.parent2/sheet.cols; 
+    let end_col = child.parent2%sheet.cols;
+    for i in start_row..=end_row {
+        for j in start_col..=end_col {
+            if let Some(ref_cell) = sheet.get_cell(i,j){
+                remove_child(ref_cell, key);
+            }
+        return Err (CommandStatus::CmdInvalidCell);
+        }
+}
+
+}
+else if rem==0 {
+    let ref_cell1 = sheet.get_cell(child.parent1/sheet.cols, child.parent1%sheet.cols);
+    let ref_cell2 = sheet.get_cell(child.parent2/sheet.cols, child.parent2%sheet.cols);
+    if let Some(ref_cell1) = ref_cell1 {
+        remove_child(ref_cell1, key);
+    }
+    if let Some(ref_cell2) = ref_cell2 {
+        remove_child(ref_cell2, key);
+    }
+return Err (CommandStatus::CmdInvalidCell);
+}
+else if rem==2 {
+    let ref_cell1 = sheet.get_cell(child.parent1/sheet.cols, child.parent1%sheet.cols);
+    if let Some(ref_cell1) = ref_cell1 {
+        remove_child(ref_cell1, key);
+    }
+    return Err (CommandStatus::CmdInvalidCell);
+}
+else if rem==3{
+    let ref_cell2 = sheet.get_cell(child.parent2/sheet.cols, child.parent2%sheet.cols);
+    if let Some(ref_cell1) = ref_cell1 {
+        remove_child(ref_cell1, key);
+    }
+    return Err (CommandStatus::CmdInvalidCell);
+}
+
+}
+pub fn remove_child(parent: &Cell, key: i32) {
+    parent.children.remove_child(key);
+}
+
+pub fn add_children(sheet:&Spreadsheet,cell1: i32, cell2:i32 , formula:i16 , row :i16, col:i16)   {
+    let rem = formula %10 as i16;
+    if formula== -1 {
+        return;
+    }   
+    if rem ==0{
+        let ref_cell1 = get_cell_from_key(sheet , cell1);
+        let ref_cell2= get_cell_from_key(sheet,cell2);
+        let cols=sheet.cols;
+        add_child(ref_cell1, row, col, cols);
+    }
+    if rem ==
+
+
+}
+pub fn add_child(parent: &Cell, row: i16, col:i16, cols:i16){
+    let key = get_key(row, col, cols);
+    parent.children.prepend(key);
+
 }

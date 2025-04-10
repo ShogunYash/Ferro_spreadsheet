@@ -1,4 +1,6 @@
 use crate::spreadsheet::{Spreadsheet, CommandStatus}; // Importing Spreadsheet and CommandStatus from spreadsheet module
+use crate::linked_list::Node; // Importing Node from linked_list module
+
 
 // Cell value representation
 #[derive(Debug, Clone, PartialEq)]
@@ -15,6 +17,7 @@ pub struct Cell {
     pub  parent2: i32,              // Stores parent cell key or end of range or custom value
     pub  value: CellValue,          // Stores the value of the cell and error state
     pub  formula: i16,              // Stores the formula code
+    pub  children: Node,
 } 
 
 impl Cell {

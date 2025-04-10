@@ -4,7 +4,12 @@ use lazy_static::lazy_static;
 
 use crate::cell::{Cell, CellValue, parse_cell_reference};
 use crate::spreadsheet::{Spreadsheet, CommandStatus};
-
+pub struct Range {
+    pub start_row: i16,
+    pub start_col: i16,
+    pub end_row: i16,
+    pub end_col: i16,
+}
 // Add missing functions and fix errors
 pub fn sum_value(sheet: &mut Spreadsheet, row: i16, col: i16, range: &Range) -> CommandStatus {
     let row1 = range.start_row;
@@ -219,12 +224,7 @@ impl Spreadsheet {
 
 
 // Keep the Range struct and parse_range function
-pub struct Range {
-    pub start_row: i16,
-    pub start_col: i16,
-    pub end_row: i16,
-    pub end_col: i16,
-}
+
 
 pub fn parse_range(spreadsheet: &Spreadsheet,range_str: &str) -> Result<Range, CommandStatus> {
     // Find the colon in the range string.
