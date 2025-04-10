@@ -127,7 +127,7 @@ impl Spreadsheet {
     }
 
     pub fn scroll_to_cell(&mut self, cell: &str) -> CommandStatus {
-        
+        // add or give cell expr
         match parse_cell_reference(self, cell) {
             Ok((row, col)) => {
                 if row>=0 && row < self.rows && col >= 0 && col < self.cols {
