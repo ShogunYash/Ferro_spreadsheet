@@ -1,7 +1,3 @@
-use std::collections::HashSet;
-use regex::Regex;
-use lazy_static::lazy_static;
-
 use crate::cell::{Cell, CellValue, parse_cell_reference};
 use crate::spreadsheet::{Spreadsheet, CommandStatus};
 pub struct Range {
@@ -23,17 +19,13 @@ pub fn sum_value(sheet: &mut Spreadsheet, row: i16, col: i16, range: &Range) -> 
     // First collect all values (immutable borrows)
     for i in row1..=row2 {
         for j in col1..=col2 {
-            if let Some(ref_cell) = sheet.get_cell(i, j) {
+            let ref_cell = sheet.get_cell(i, j);
                 if let CellValue::Integer(value) = ref_cell.value {
                     sum += value;
                 } else {
                     has_error = true;
                     break;
                 }
-            } else {
-                has_error = true;
-                break;
-            }
         }
         if has_error {
             break;
@@ -67,17 +59,13 @@ pub fn eval_variance(sheet: &mut Spreadsheet, row:i16 , col:i16 , range: &Range)
     let mut has_error = false;
     for i in row1..=row2 {
         for j in col1..=col2 {
-            if let Some(ref_cell) = sheet.get_cell(i, j) {
+            let ref_cell = sheet.get_cell(i, j);
                 if let CellValue::Integer(value) = ref_cell.value {
                     sum += value;
                 } else {
                     has_error = true;
                     break;
                 }
-            } else {
-                has_error = true;
-                break;
-            }
         }
         if has_error {
             break;
@@ -92,7 +80,7 @@ pub fn eval_variance(sheet: &mut Spreadsheet, row:i16 , col:i16 , range: &Range)
     let mut variance = 0.0;
     for i in row1..=row2 {
         for j in col1..=col2 {
-            if let Some(ref_cell) = sheet.get_cell(i, j) {
+            let ref_cell = sheet.get_cell(i, j);
                 if let CellValue::Integer(value) = ref_cell.value {
                     let diff = value as f64 - mean;
                     variance += diff * diff;
@@ -100,10 +88,6 @@ pub fn eval_variance(sheet: &mut Spreadsheet, row:i16 , col:i16 , range: &Range)
                     has_error = true;
                     break;
                 }
-            } else {
-                has_error = true;
-                break;
-            }
         }
         if has_error {
             break;
@@ -139,17 +123,13 @@ pub fn eval_min(sheet: &mut Spreadsheet, row: i16, col: i16, range: &Range) -> C
     // First collect all values (immutable borrows)
     for r in row1..=row2 {
         for c in col1..=col2 {
-            if let Some(parent_cell) = sheet.get_cell(r, c) {
+            let parent_cell= sheet.get_cell(r, c);
                 if let CellValue::Integer(value) = parent_cell.value {
                     min_value = std::cmp::min(min_value, value);
                 } else {
                     has_error = true;
                     break;
                 }
-            } else {
-                has_error = true;
-                break;
-            }
         }
         if has_error {
             break;
@@ -176,17 +156,13 @@ pub fn eval_max(sheet: &mut Spreadsheet, row: i16, col: i16, range: &Range) -> C
     // First collect all values (immutable borrows)
     for r in range.start_row..=range.end_row {
         for c in range.start_col..=range.end_col {
-            if let Some(parent_cell) = sheet.get_cell(r, c) {
+            let parent_cell= sheet.get_cell(r, c); 
                 if let CellValue::Integer(value) = parent_cell.value {
                     max_value = std::cmp::max(max_value, value);
                 } else {
                     has_error = true;
                     break;
                 }
-            } else {
-                has_error = true;
-                break;
-            }
         }
         if has_error {
             break;
