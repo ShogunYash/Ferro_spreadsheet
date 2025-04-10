@@ -205,24 +205,6 @@ pub fn eval_max(sheet: &mut Spreadsheet, row: i16, col: i16, range: &Range) -> C
     CommandStatus::CmdOk
 }
 
-// Add these helper methods to Spreadsheet
-impl Spreadsheet {
-    pub fn get_row_from_key(&self, key: i32) -> i16 {
-        (key / (self.cols as i32)) as i16
-    }
-    
-    pub fn get_col_from_key(&self, key: i32) -> i16 {
-        (key % (self.cols as i32)) as i16
-    }
-
-    pub fn sleep(&mut self, _seconds: i32) -> i32 {
-        // Implementation would depend on your needs
-        // For now, just return the number of seconds
-        _seconds
-    }
-}
-
-
 // Keep the Range struct and parse_range function
 
 
