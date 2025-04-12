@@ -16,4 +16,5 @@
 *.timestamp
 target/
 sheet/target/
+*.json
 
