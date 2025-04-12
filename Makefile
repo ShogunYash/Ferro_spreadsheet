@@ -18,8 +18,13 @@ else
   CARGO = cargo
 endif
 
-# Build targets
-.PHONY: all clean build run check-cargo
+# Build configuration
+RELEASE_FLAGS = --release
+# Fix: Set RUSTFLAGS as an environment variable when calling cargo
+RUSTFLAGS_OPTIMIZED = -C target-cpu=native -C opt-level=3 -C codegen-units=1 -C lto=fat
+
+# Build targets with different optimization levels
+.PHONY: all clean build run check-cargo optimized bench test package
 
 # Default target
 all: check-cargo build
@@ -37,10 +42,30 @@ build: check-cargo
 	@echo "Building Ferro spreadsheet..."
 	$(CARGO) build --release
 
+# Build with high optimization settings
+optimized: check-cargo
+	@echo "Building highly optimized Ferro spreadsheet..."
+	RUSTFLAGS="$(RUSTFLAGS_OPTIMIZED)" $(CARGO) build $(RELEASE_FLAGS)
+
 # Run the project with provided arguments
 run: check-cargo
 	@echo "Running Ferro spreadsheet..."
 	$(CARGO) run --release -- $(filter-out $@,$(MAKECMDGOALS))
+
+# Run with high optimization
+run-optimized: optimized
+	@echo "Running optimized Ferro spreadsheet..."
+	RUSTFLAGS="$(RUSTFLAGS_OPTIMIZED)" $(CARGO) run $(RELEASE_FLAGS) -- $(filter-out $@,$(MAKECMDGOALS))
+
+# Benchmark the application
+bench: check-cargo
+	@echo "Running benchmarks..."
+	$(CARGO) bench
+
+# Run tests
+test: check-cargo
+	@echo "Running tests..."
+	$(CARGO) test
 
 # Clean the project
 clean: check-cargo
@@ -56,6 +81,14 @@ install: build
 install-win: build
 	@echo "Installing Ferro spreadsheet..."
 	copy /Y target\release\sheet.exe %USERPROFILE%\bin\
+
+# Create release package
+package: optimized
+	@echo "Creating release package..."
+	@mkdir -p release-package
+	cp target/release/sheet release-package/
+	cp README.md release-package/ 2>/dev/null || echo "No README found"
+	@echo "Package created in release-package directory"
 
 # Allow passing arguments to the run target
 %:

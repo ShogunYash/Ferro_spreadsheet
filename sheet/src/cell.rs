@@ -10,24 +10,23 @@ pub enum CellValue {
 }
 
 // Represents a cell in the spreadsheet
-
-
+// Fields are ordered by size (largest to smallest) to minimize padding
 pub struct Cell {
-    pub  parent1: i32,              // Stores parent cell key or start of range or custom value
-    pub  parent2: i32,              // Stores parent cell key or end of range or custom value
-    pub  value: CellValue,          // Stores the value of the cell and error state
-    pub  formula: i16,              // Stores the formula code
-    pub  children: Node,
+    pub children: Option<Box<Node>>,  // Largest field (pointer)
+    pub parent1: i32,                 // 4 bytes
+    pub parent2: i32,                 // 4 bytes
+    pub value: CellValue,             // enum (typically 8 bytes with tag)
+    pub formula: i16,                 // 2 bytes - smallest field
 } 
 
 impl Cell {
     pub fn new() -> Self {
         Cell {
+            children: None,
             parent1: -1,
             parent2: -1,
             value: CellValue::Integer(0),
-            formula: -1,  
-            children: Node::new(-1), // Initialize with a dummy value
+            formula: -1,
         }
     }
 }
@@ -71,10 +70,7 @@ pub fn parse_cell_reference(sheet: &Spreadsheet, cell_ref: &str) -> Result<(i16,
     // Parse row number (convert to 0-based)
     let row = match row_str.parse::<i16>() {
         Ok(r) => r - 1,
-        Err(e) => {
-        
-            return Err(CommandStatus::CmdUnrecognized);
-        }
+        Err(_) => return Err(CommandStatus::CmdUnrecognized)
     };
     
     // Convert column name to column index

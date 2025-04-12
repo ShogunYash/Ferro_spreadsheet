@@ -1,9 +1,7 @@
 use std::clone;
-
 use crate::spreadsheet::{Spreadsheet, CommandStatus};
 use crate::cell::{Cell, CellValue, parse_cell_reference};
-use crate::formula::parse_range;
-use crate::formula::Range;
+use crate::formula::{parse_range, Range};
 use crate::formula::{eval_max, eval_min, sum_value, eval_variance};
 use crate::graph::{add_children, remove_all_parents, detect_cycle};
 
@@ -12,8 +10,8 @@ pub fn get_key(row: i16, col: i16, cols: i16) -> i32 {
     ((row as i32 )* (cols as i32) + (col as i32)) as i32
 }
 
-pub fn get_cell_from_key (spreadsheet:&Spreadsheet, key:i32) -> &Cell {
-    return &spreadsheet.grid[key as usize];
+pub fn get_cell_from_key (spreadsheet:&mut Spreadsheet, key:i32) -> &mut Cell {
+    return &mut spreadsheet.grid[key as usize];
 }
 
 pub fn handle_sleep(
@@ -25,45 +23,58 @@ pub fn handle_sleep(
 ) -> CommandStatus {
     // Get the cols value early to avoid borrowing issues
     let cols = sheet.cols;
-    let pkey = get_key(row, col, cols) ; // Cast to i16 to match cell.parent fields
+    let cell_key = get_key(row, col, cols);
     
     // Handle cell reference case
     if let Ok((target_row, target_col)) = parse_cell_reference(sheet, expr) {
-        // Check if the referenced cell exists and get its value
-        let parent_cell = sheet.get_cell(target_row, target_col);
-            // Add parent to the cell
-
-            // Store the value before mutable borrow
-            let value = parent_cell.value.clone();
-            
-            remove_all_parents(sheet, row, col); 
-            // Now get our target cell for mutation
+        // Get the value from parent cell first to avoid borrowing issues
+        let parent_value;
+        let pkey = get_key(target_row, target_col, cols);
+        {
+            let parent_cell = sheet.get_cell(target_row, target_col);
+            parent_value = parent_cell.value.clone();
+        }
+        
+        // Variables to store old values
+        let old_parent1;
+        let old_parent2;
+        let old_formula;
+        let old_value;
+        // Remove parents and set up new formula
+        {
+            remove_all_parents(sheet, row, col);
             let cell = sheet.get_mut_cell(row, col);
-            //storing the old parents and formula in case of circular ref
-            let old_parent1 = cell.parent1;
-            let old_parent2 = cell.parent2;
-            let old_formula = cell.formula;
-            // Set the formula code for sleep
-            cell.parent1 = pkey;   // Store the current cell key
-            cell.parent2 = -1;     // No second parent for sleep
-            cell.formula = 102;    // Custom formula code for sleep
-            cell.value = value.clone();    // Set the value we stored earlier
             
-            // Check for circular reference
-            if detect_cycle(sheet, pkey, -1, 102, get_key(row, col, cols)) {
-                cell.parent1 = old_parent1;
-                cell.parent2 = old_parent2;
-                cell.formula = old_formula;
-                add_children(sheet, old_parent1, old_parent2, old_formula, row, col);
-                return CommandStatus::CmdCircularRef;
-            }
-
-            // Now add current cell as a child to the parent cell
-            add_children(sheet, pkey, -1, 102, row, col);
-            // Add to sleep time if integer
-            if let CellValue::Integer(val) = value {
-                *sleep_time += val as f64;
-            }
+            // Store old values for possible restoration
+            old_parent1 = cell.parent1;
+            old_parent2 = cell.parent2;
+            old_formula = cell.formula;
+            old_value = cell.value.clone();
+            // Set the formula code for sleep
+            cell.parent1 = pkey;
+            cell.parent2 = -1;
+            cell.formula = 102;    // Custom formula code for sleep
+            cell.value = parent_value.clone();
+        }
+        
+        // Check for circular reference
+        // if detect_cycle(sheet, pkey, -1, 102, cell_key) {
+        //     let cell: &mut Cell = sheet.get_mut_cell(row, col);
+        //     cell.parent1 = old_parent1;
+        //     cell.parent2 = old_parent2;
+        //     cell.formula = old_formula;
+        //     cell.value = old_value;
+        //     add_children(sheet, old_parent1, old_parent2, old_formula, row, col);
+        //     return CommandStatus::CmdCircularRef;
+        // }
+        
+        // Add children and update sleep time
+        add_children(sheet, pkey, -1, 102, row, col);
+        
+        // Add to sleep time if integer
+        if let CellValue::Integer(val) = parent_value {
+            *sleep_time += val as f64;
+        }
     } 
     // Handle numeric literal case
     else if let Ok(val) = expr.parse::<i32>() {
@@ -89,10 +100,11 @@ pub fn evaluate_arithmetic(
     expr: &str,
 ) -> CommandStatus {
     let cols = sheet.cols;
+    let cell_key = get_key(row, col, cols);
     if let Ok(number) = expr.parse::<i32>() {
-        let cell = sheet.get_mut_cell(row, col);
         // Remove all the parents
         remove_all_parents(sheet, row, col);
+        let cell = sheet.get_mut_cell(row, col);
         cell.value = CellValue::Integer(number);
         cell.formula = -1;
         cell.parent1 = -1;
@@ -103,34 +115,51 @@ pub fn evaluate_arithmetic(
     if expr.chars().all(|c| c.is_alphanumeric() || c == '_') {
         match parse_cell_reference(sheet, expr) {
             Ok((target_row, target_col)) => {
-                // Get parent cell mutable
-                let parent_cell = sheet.get_mut_cell(target_row, target_col);
-
-                // Store the value before mutable borrow
-                let value = parent_cell.value.clone();
-                // Now get our target cell for mutation
-                let cell = sheet.get_mut_cell(row, col);
-                // Store the old parents and formula in case of circular ref
-                let old_parent1 = cell.parent1;
-                let old_parent2 = cell.parent2;
-                let old_formula = cell.formula;
-                remove_all_parents(sheet, row, col);
-                // Set the formula code for reference
-                cell.parent1 = get_key(target_row, target_col, cols);   // Store the current cell key
-                cell.parent2 = -1;     // No second parent for reference
-                cell.formula = 82;    // Custom formula code for reference
+                // Get value from parent cell first to avoid borrowing issues
+                let parent_value;
+                {
+                    let parent_cell = sheet.get_cell(target_row, target_col);
+                    parent_value = parent_cell.value.clone();
+                }
+                
+                // Prepare variables to store old values 
+                let old_parent1;
+                let old_parent2;
+                let old_formula;
+                let parent1;
+                let old_value;
+                
+                // Remove parents and set up new formula
+                {
+                    remove_all_parents(sheet, row, col);
+                    let cell = sheet.get_mut_cell(row, col);
+                    
+                    // Store old values
+                    old_parent1 = cell.parent1;
+                    old_parent2 = cell.parent2;
+                    old_formula = cell.formula;
+                    old_value = cell.value.clone();
+                    // Set up new reference
+                    parent1 = get_key(target_row, target_col, cols);
+                    cell.parent1 = parent1;
+                    cell.parent2 = -1;
+                    cell.formula = 82;    // Custom formula code for reference
+                    cell.value = parent_value;
+                }
                 
                 // Check for circular reference
-                if detect_cycle_range(sheet, target_row, target_col, row, col) {
+                if detect_cycle(sheet, parent1, -1, 82, cell_key) {
+                    let cell = sheet.get_mut_cell(row, col);
                     cell.parent1 = old_parent1;
                     cell.parent2 = old_parent2;
                     cell.formula = old_formula;
+                    cell.value = old_value;
                     add_children(sheet, old_parent1, old_parent2, old_formula, row, col);
                     return CommandStatus::CmdCircularRef;
                 }
-                cell.value = parent_cell.value.clone();    // Set the value we stored earlier
-                // Now add current cell as a child to the parent cell
-                add_children(sheet, cell.parent1, -1, 82, row, col);
+                
+                // Add children after cycle check passes
+                add_children(sheet, parent1, -1, 82, row, col);
             },
             Err(status) => {
                 return status;
@@ -141,71 +170,73 @@ pub fn evaluate_arithmetic(
 
     // Binary arithmetic expression handling
     for op_idx in 2..expr.len() {
-            let c = expr.chars().nth(op_idx).unwrap();
-            
-            if c == '+' || c == '-' || c == '*' || c == '/' {
-                // Split the expression into left and right parts
-                let left = &expr[..op_idx].trim();
-                let right = &expr[op_idx+1..].trim();
+        let c = expr.chars().nth(op_idx).unwrap();
+        
+        if c == '+' || c == '-' || c == '*' || c == '/' {
+            // Split the expression into left and right parts
+            let left = &expr[..op_idx].trim();
+            let right = &expr[op_idx+1..].trim();
 
-                if !left.is_empty() && !right.is_empty() {
-                    let left_status = parse_cell_reference(sheet, left);
-                    if left_status.is_err() {
-                        return left_status.err().unwrap();
-                    }
-                    let (rowl, coll) = left_status.unwrap();
-                    let left_cell = sheet.get_cell(rowl, coll).unwrap();
-                    let left_value = if let CellValue::Integer(val) = left_cell.value {
-                        val
-                    } else {
-                        let cell = sheet.get_mut_cell(row, col);
-                        cell.value = CellValue::Error;
-                        return CommandStatus::CmdOk;
-                    };
-                    
-                    let right_status = parse_cell_reference(sheet, right);
-                    if right_status.is_err() {
-                        return right_status.err().unwrap();
-                    }
-                    let (rowr, colr) = right_status.unwrap();
-                    // Get the right result and perform the operation
-                    let right_cell = sheet.get_cell(rowr, colr).unwrap();
-                    
-                    let right_value = if let CellValue::Integer(val) = right_cell.value {
-                        val
-                    } else {
-                        let cell = sheet.get_mut_cell(row, col);
-                        cell.value = CellValue::Error;
-                        return CommandStatus::CmdOk;
-                    };
-                    
-                    // Perform the operation
-                    let cell = sheet.get_mut_cell(row, col);
-                    if c == '+' {
-                        cell.value = CellValue::Integer(left_value + right_value);
-                        cell.formula = 10;
-                    } else if c == '-'{ 
-                        cell.value = CellValue::Integer(left_value - right_value);
-                        cell.formula = 20;
-                    }
-                    else if c == '*' {
-                        cell.value = CellValue::Integer(left_value * right_value);
-                        cell.formula = 40; // Code for multiplication
-                    } else if c == '/' { 
-                        if right_value == 0 {
-                            cell.value = CellValue::Error; // Division by zero
-                            return CommandStatus::CmdOk;
-                        }
-                        cell.value = CellValue::Integer(left_value / right_value);
-                        cell.formula = 30; // Code for division
-                    }
-                    
-                    
-                     // Code for binary operation
-                    return CommandStatus::CmdOk;
+            if !left.is_empty() && !right.is_empty() {
+                let left_status = parse_cell_reference(sheet, left);
+                if left_status.is_err() {
+                    return left_status.err().unwrap();
                 }
+                let (rowl, coll) = left_status.unwrap();
+                let left_cell = sheet.get_cell(rowl, coll);
+                let left_value = if let CellValue::Integer(val) = left_cell.value {
+                    val
+                } else {
+                    let cell = sheet.get_mut_cell(row, col);
+                    cell.value = CellValue::Error;
+                    return CommandStatus::CmdOk;
+                };
+                
+                let right_status = parse_cell_reference(sheet, right);
+                if right_status.is_err() {
+                    return right_status.err().unwrap();
+                }
+                let (rowr, colr) = right_status.unwrap();
+                // Get the right result and perform the operation
+                let right_cell = sheet.get_cell(rowr, colr);
+                
+                let right_value = if let CellValue::Integer(val) = right_cell.value {
+                    val
+                } else {
+                    let cell = sheet.get_mut_cell(row, col);
+                    cell.value = CellValue::Error;
+                    return CommandStatus::CmdOk;
+                };
+                
+                // Perform the operation
+                let cell = sheet.get_mut_cell(row, col);
+                if c == '+' {
+                    cell.value = CellValue::Integer(left_value + right_value);
+                    cell.formula = 10;
+                } else if c == '-'{ 
+                    cell.value = CellValue::Integer(left_value - right_value);
+                    cell.formula = 20;
+                }
+                else if c == '*' {
+                    cell.value = CellValue::Integer(left_value * right_value);
+                    cell.formula = 40; // Code for multiplication
+                } else if c == '/' { 
+                    if right_value == 0 {
+                        cell.value = CellValue::Error; // Division by zero
+                        return CommandStatus::CmdOk;
+                    }
+                    cell.value = CellValue::Integer(left_value / right_value);
+                    cell.formula = 30; // Code for division
+                }
+                
+                
+                 // Code for binary operation
+                return CommandStatus::CmdOk;
+            }
         }
     }
+    // If we reach here, the expression is unrecognized
+    CommandStatus::CmdUnrecognized
 }
 
 pub fn evaluate_formula(
@@ -242,31 +273,38 @@ pub fn evaluate_formula(
             Err(status) => return status,
         };
 
-        let cell = sheet.get_mut_cell(row, col);
-        //storing the old parents and formula in case of circular ref
-        let old_parent1 = cell.parent1;
-        let old_parent2 = cell.parent2;
-        let old_formula = cell.formula;
-        remove_all_parents(sheet, row, col); 
-        // Set the parent keys based on the range.
-        cell.parent1 = get_key(range.start_row, range.start_col, cols);
-        cell.parent2 = get_key(range.end_row, range.end_col, cols);
-        // Set the formula code based on the function type.
-        cell.formula = if is_sum {
-            5
-        } else if is_avg {
-            6
-        } else if is_min {
-            7
-        } else if is_max {
-            8
-        } else {
-            9 // is_stdev case
-        };
+        let (old_parent1, old_parent2, old_formula, parent1, parent2, formula);
+        {
+            remove_all_parents(sheet, row, col); 
+            let cell = sheet.get_mut_cell(row, col);
+            //storing the old parents and formula in case of circular ref
+            old_parent1 = cell.parent1;
+            old_parent2 = cell.parent2;
+            old_formula = cell.formula;
+            // Set the parent keys based on the range.
+            cell.parent1 = get_key(range.start_row, range.start_col, cols);
+            cell.parent2 = get_key(range.end_row, range.end_col, cols);
+            // Set the formula code based on the function type.
+            cell.formula = if is_sum {
+                5
+            } else if is_avg {
+                6
+            } else if is_min {
+                7
+            } else if is_max {
+                8
+            } else {
+                9 // is_stdev case
+            };
 
+            parent1 = cell.parent1;
+            parent2 = cell.parent2;
+            formula = cell.formula;
+        }
         // Evaluate the function.
-        if detect_cycle(sheet, cell.parent1, cell.parent2, cell.formula, get_key(row, col, cols)) {
+        if detect_cycle(sheet, parent1, parent2, formula, get_key(row, col, cols)) {
             // If a cycle is detected, restore the old parents and formula
+            let cell = sheet.get_mut_cell(row, col);
             cell.parent1 = old_parent1;
             cell.parent2 = old_parent2;
             cell.formula = old_formula;
@@ -274,9 +312,7 @@ pub fn evaluate_formula(
             return CommandStatus::CmdCircularRef;
         }
 
-        // Now add current cell as a child to the range cells
-        add_children(sheet, cell.parent1, cell.parent2, cell.formula, row, col);
-
+        add_children(sheet, parent1, parent2, formula, row, col);
         if is_stdev {
             return eval_variance(sheet,row,col, &range);
         } else if is_max {
@@ -289,7 +325,7 @@ pub fn evaluate_formula(
                 return status;
             }
             
-            let count  =( (range.end_row - range.start_row + 1) * (range.end_col - range.start_col + 1) )as i32;
+            let count  =( ((range.end_row - range.start_row + 1) as i32) * ((range.end_col - range.start_col + 1) as i32) )as i32;
             let cell = sheet.get_mut_cell(row, col);
             if let CellValue::Integer(sum) = cell.value {
                 cell.value = CellValue::Integer(sum / count);

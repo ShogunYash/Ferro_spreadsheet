@@ -1,0 +1,11 @@
+[build]
+# Add Rust compiler flags
+rustflags = [
+    "-C", "target-cpu=native",
+    "-C", "inline-threshold=275",
+]
+
+# Uncomment for profile-guided optimization (requires multiple steps)
+# rustflags = ["-Cprofile-generate=/tmp/pgo-data"]
+# Then run your program, then recompile with:
+# rustflags = ["-Cprofile-use=/tmp/pgo-data"]

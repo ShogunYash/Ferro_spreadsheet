@@ -12,8 +12,6 @@ pub enum CommandStatus {
     CmdUnrecognized,
     CmdCircularRef,
     CmdInvalidCell,
-    CmdInvalidRange,
-    CmdRangeerror,
 }
 
 // Spreadsheet structure now uses a contiguous array for grid
@@ -105,14 +103,11 @@ impl Spreadsheet {
         for i in 0..display_row {
             print!("{:<4} ", start_row + i + 1); // Show 1-based row numbers
             for j in 0..display_col {
-                if let Some(cell) = self.get_cell(start_row + i, start_col + j) {
+                let cell = self.get_cell(start_row + i, start_col + j); 
                     match cell.value {
                         CellValue::Integer(value) => print!("{:<8} ", value),
                         CellValue::Error => print!("{:<8} ", "ERR"),
                     }
-                } else {
-                    print!("{:<8} ", "???"); // Indicate an access error
-                }
             }
             println!();
         }

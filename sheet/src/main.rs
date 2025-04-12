@@ -12,8 +12,48 @@ use std::time::{Duration, Instant};
 
 use spreadsheet::Spreadsheet;
 use spreadsheet::CommandStatus;
-use evaluator::{set_cell_value, handle_command};
-use cell::parse_cell_reference;
+use evaluator::handle_command;
+
+// Add memory usage functionality
+struct MemoryUsage {
+    physical_mem: u64,
+}
+
+fn memory_stats() -> Option<MemoryUsage> {
+    // Simple implementation that reads from /proc/self/statm on Linux
+    // or returns a dummy value on other platforms
+    #[cfg(target_os = "linux")]
+    {
+        use std::fs::File;
+        use std::io::Read;
+        
+        let mut buffer = String::new();
+        if let Ok(mut file) = File::open("/proc/self/statm") {
+            if file.read_to_string(&mut buffer).is_ok() {
+                let values: Vec<&str> = buffer.split_whitespace().collect();
+                if values.len() >= 2 {
+                    if let Ok(vm_pages) = values[0].parse::<u64>() {
+                        // Convert from pages to bytes (assume 4KB page size)
+                        let page_size = 4096;
+                        return Some(MemoryUsage {
+                            physical_mem: vm_pages * page_size,
+                        });
+                    }
+                }
+            }
+        }
+        None
+    }
+    
+    // For non-Linux platforms, provide a dummy implementation
+    #[cfg(not(target_os = "linux"))]
+    {
+        // Return a placeholder value for platforms that don't support /proc
+        Some(MemoryUsage {
+            physical_mem: 10 * 1024 * 1024, // 10 MB placeholder
+        })
+    }
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -39,21 +79,20 @@ fn main() {
     let mut last_time = 0.0; // Initialize last time
     let start = Instant::now();
     
-    
     // For very large spreadsheet sizes, warn the user
-    if (rows as i64) * (cols as i64) > 1_000_000 {
-        println!("Warning: Creating a large spreadsheet with {} cells", (rows as i64) * (cols as i64));
-        println!("This may consume significant memory.");
-        print!("Do you want to continue? (y/n) ");
-        io::stdout().flush().unwrap();
+    // if (rows as i64) * (cols as i64) > 1_000_000 {
+    //     println!("Warning: Creating a large spreadsheet with {} cells", (rows as i64) * (cols as i64));
+    //     println!("This may consume significant memory.");
+    //     print!("Do you want to continue? (y/n) ");
+    //     io::stdout().flush().unwrap();
         
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-        if input.trim().to_lowercase() != "y" {
-            println!("Operation cancelled.");
-            process::exit(0);
-        }
-    }
+    //     let mut input = String::new();
+    //     io::stdin().read_line(&mut input).unwrap();
+    //     if input.trim().to_lowercase() != "y" {
+    //         println!("Operation cancelled.");
+    //         process::exit(0);
+    //     }
+    // }
     
     let mut sheet = match Spreadsheet::create(rows, cols) {
         Some(s) => s,
@@ -73,9 +112,10 @@ fn main() {
     let mut input = String::with_capacity(128);
     
     loop {
-        command_time=0.0; // Reset command time for each iteration
         sheet.print_spreadsheet();
-        print!("[{:.1}] ({}) > ", last_time, last_status);
+        if let Some(usage) = memory_stats() {
+            print!("[{:.1}s, {:.1}MB] ({}) > ", last_time, usage.physical_mem as f64 / (1024.0 *1024.0), last_status);
+        }
         io::stdout().flush().unwrap(); // Ensure the prompt is shown
     
         input.clear();
@@ -95,12 +135,11 @@ fn main() {
 
         if sleep_time <= command_time {
             sleep_time=0.0;
-
         }
         else {
             sleep_time -= command_time;
         }
-        last_time = command_time +sleep_time;
+        last_time = command_time + sleep_time;
         if sleep_time > 0.0 {
             sleep(Duration::from_secs_f64(sleep_time));
         }
@@ -109,12 +148,9 @@ fn main() {
         // Update last_status based on the current command status
         last_status = match status {
             CommandStatus::CmdOk => "ok",
-            CommandStatus::CmdUnrecognized => "unrecognized cmd",
-            CommandStatus::CmdCircularRef => "circular ref",
-            CommandStatus::CmdInvalidCell => "invalid cell",
-            CommandStatus::CmdInvalidRange => "invalid range",
-            CommandStatus::CmdRangeerror => "range error",
-            _ => "unknown error",
+            CommandStatus::CmdUnrecognized => "unrecognized_cmd",
+            CommandStatus::CmdCircularRef => "circular_ref",
+            CommandStatus::CmdInvalidCell => "invalid_cell",
         };
     }
 }

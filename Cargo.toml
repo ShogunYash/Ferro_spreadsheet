@@ -9,6 +9,26 @@ description = "A simple spreadsheet implementation in Rust"
 name = "sheet"
 path = "sheet/src/main.rs"
 
+# Release profile optimization settings
+[profile.release]
+# Enable link-time optimization for better dead code elimination
+lto = true
+# Enable thin LTO for faster compile times with similar optimization
+# lto = "thin"
+
+# Enable code optimizations for size and speed
+opt-level = 3  # Maximum optimization (0-3)
+# opt-level = "s"  # Optimize for size
+# opt-level = "z"  # Optimize aggressively for size
+
+# Control debug information
+debug = false  # No debug information in release build
+strip = true   # Strip debug symbols
+
+# Enable additional optimizations
+codegen-units = 1   # Reduce to single unit for better optimization
+panic = "abort"     # Removes panic unwinding code
+incremental = false # Disables incremental compilation in release
+
 [dependencies]
-regex = "1.7.0"
-lazy_static = "1.4.0"
+# Dependencies would go here

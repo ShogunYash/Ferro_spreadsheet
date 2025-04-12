@@ -1,6 +1,6 @@
 // linked_list.rs
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
     pub key: i32,
     pub next: Option<Box<Node>>,
@@ -20,22 +20,6 @@ impl Node {
         }))
     }
 
-    // Append a new node to the end of the list
-    pub fn append(mut head: &mut Option<Box<Node>>, key: i32) {
-        match head {
-            None => {
-                *head = Some(Box::new(Node::new(key)));
-            }
-            Some(node) => {
-                let mut current = node;
-                while let Some(ref mut next_node) = current.next {
-                    current = next_node;
-                }
-                current.next = Some(Box::new(Node::new(key)));
-            }
-        }
-    }
-
     // Remove a node with the given key
     pub fn remove(head: &mut Option<Box<Node>>, key: i32) -> bool {
         if let Some(node) = head {
@@ -44,77 +28,20 @@ impl Node {
                 return true;
             }
             
-            let mut current = node;
-            while let Some(ref mut next) = current.next {
-                if next.key == key {
-                    current.next = next.next.take();
-                    return true;
+            let mut current = head;
+            while let Some(node) = current {
+                // Check if the next node is the one we want to remove
+                if let Some(next) = &node.next {
+                    if next.key == key {
+                        // Take the next node's next and replace it
+                        let mut removed = node.next.take().unwrap();
+                        node.next = removed.next.take();
+                        return true;
+                    }
                 }
-                current = next;
+                current = &mut node.next;
             }
         }
         false
-    }
-
-    // Check if a key exists in the list
-    pub fn contains(head: &Option<Box<Node>>, key: i32) -> bool {
-        let mut current = head;
-        while let Some(node) = current {
-            if node.key == key {
-                return true;
-            }
-            current = &node.next;
-        }
-        false
-    }
-    
-    // Find node with the given key
-    pub fn find(head: &Option<Box<Node>>, key: i32) -> Option<&Node> {
-        let mut current = head;
-        while let Some(node) = current {
-            if node.key == key {
-                return Some(node);
-            }
-            current = &node.next;
-        }
-        None
-    }
-
-    // Convert the linked list to a vector for testing or debugging
-    pub fn to_vec(&self) -> Vec<i32> {
-        let mut result = vec![self.key];
-        let mut current = &self.next;
-        while let Some(node) = current {
-            result.push(node.key);
-            current = &node.next;
-        }
-        result
-    }
-    
-    // Get the length of the linked list
-    pub fn len(head: &Option<Box<Node>>) -> usize {
-        let mut count = 0;
-        let mut current = head;
-        
-        while let Some(node) = current {
-            count += 1;
-            current = &node.next;
-        }
-        
-        count
-    }
-    
-    // Create a linked list from a vector
-    pub fn from_vec(values: &[i32]) -> Option<Box<Node>> {
-        if values.is_empty() {
-            return None;
-        }
-        
-        let mut head = Some(Box::new(Node::new(values[0])));
-        for &value in &values[1..] {
-            Node::append(&mut head, value);
-        }
-        
-        head
     }
 }
