@@ -405,3 +405,41 @@ pub fn handle_command(
     
     CommandStatus::CmdUnrecognized
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_handle_command() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let mut sleep_time = 0.0;
+        assert_eq!(handle_command(&mut sheet, "A1=42".to_string(), &mut sleep_time), CommandStatus::CmdOk);
+        assert_eq!(sheet.get_cell(0, 0).value, CellValue::Integer(42));
+        assert_eq!(handle_command(&mut sheet, "disable_output".to_string(), &mut sleep_time), CommandStatus::CmdOk);
+        assert_eq!(handle_command(&mut sheet, "w".to_string(), &mut sleep_time), CommandStatus::CmdOk);
+        assert_eq!(handle_command(&mut sheet, "scroll_to B2".to_string(), &mut sleep_time), CommandStatus::CmdOk);
+    }
+
+    #[test]
+    fn test_evaluate_arithmetic() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        assert_eq!(evaluate_arithmetic(&mut sheet, 0, 0, "42"), CommandStatus::CmdOk);
+        assert_eq!(sheet.get_cell(0, 0).value, CellValue::Integer(42));
+        assert_eq!(evaluate_arithmetic(&mut sheet, 0, 1, "A1"), CommandStatus::CmdOk);
+        assert_eq!(sheet.get_cell(0, 1).value, CellValue::Integer(42));
+        assert_eq!(evaluate_arithmetic(&mut sheet, 1, 0, "A1 + B1"), CommandStatus::CmdOk);
+        assert_eq!(sheet.get_cell(1, 0).value, CellValue::Integer(84));
+        assert_eq!(evaluate_arithmetic(&mut sheet, 1, 1, "A1 / B2"), CommandStatus::CmdOk); // B2 is 0
+        assert_eq!(sheet.get_cell(1, 1).value, CellValue::Error);
+    }
+
+    #[test]
+    fn test_handle_sleep() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let mut sleep_time = 0.0;
+        assert_eq!(handle_sleep(&mut sheet, 0, 0, "2", &mut sleep_time), CommandStatus::CmdOk);
+        assert_eq!(sleep_time, 2.0);
+        assert_eq!(handle_sleep(&mut sheet, 0, 1, "A1", &mut sleep_time), CommandStatus::CmdOk);
+    }
+}

@@ -45,3 +45,37 @@ impl Node {
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_node_new() {
+        let node = Node::new(42);
+        assert_eq!(node.key, 42);
+        assert!(node.next.is_none());
+    }
+
+    #[test]
+    fn test_prepend() {
+        let list = Node::prepend(None, 1);
+        assert_eq!(list.as_ref().unwrap().key, 1);
+        let list = Node::prepend(list, 2);
+        assert_eq!(list.as_ref().unwrap().key, 2);
+        assert_eq!(list.as_ref().unwrap().next.as_ref().unwrap().key, 1);
+    }
+
+    #[test]
+    fn test_remove() {
+        let mut list = Node::prepend(Node::prepend(None, 1), 2);
+        assert!(Node::remove(&mut list, 2));
+        assert_eq!(list.as_ref().unwrap().key, 1);
+        assert!(Node::remove(&mut list, 1));
+        assert!(list.is_none());
+        assert!(!Node::remove(&mut list, 3)); // Empty list
+        let mut list = Node::prepend(Node::prepend(None, 1), 2);
+        assert!(Node::remove(&mut list, 1)); // Remove middle
+        assert_eq!(list.as_ref().unwrap().key, 2);
+    }
+}

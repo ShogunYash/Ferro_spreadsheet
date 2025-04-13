@@ -223,3 +223,46 @@ pub fn parse_range(spreadsheet: &Spreadsheet,range_str: &str) -> Result<Range, C
         end_col,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sum_value() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        sheet.get_mut_cell(0, 0).value = CellValue::Integer(1);
+        sheet.get_mut_cell(0, 1).value = CellValue::Integer(2);
+        let range = Range { start_row: 0, start_col: 0, end_row: 0, end_col: 1 };
+        assert_eq!(sum_value(&mut sheet, 1, 1, &range), CommandStatus::CmdOk);
+        assert_eq!(sheet.get_cell(1, 1).value, CellValue::Integer(3));
+    }
+
+    #[test]
+    fn test_eval_variance() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        sheet.get_mut_cell(0, 0).value = CellValue::Integer(2);
+        sheet.get_mut_cell(0, 1).value = CellValue::Integer(4);
+        let range = Range { start_row: 0, start_col: 0, end_row: 0, end_col: 1 };
+        assert_eq!(eval_variance(&mut sheet, 1, 1, &range), CommandStatus::CmdOk);
+    }
+
+    #[test]
+    fn test_eval_min_max() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        sheet.get_mut_cell(0, 0).value = CellValue::Integer(1);
+        sheet.get_mut_cell(0, 1).value = CellValue::Integer(3);
+        let range = Range { start_row: 0, start_col: 0, end_row: 0, end_col: 1 };
+        assert_eq!(eval_min(&mut sheet, 1, 1, &range), CommandStatus::CmdOk);
+        assert_eq!(sheet.get_cell(1, 1).value, CellValue::Integer(1));
+        assert_eq!(eval_max(&mut sheet, 1, 2, &range), CommandStatus::CmdOk);
+        assert_eq!(sheet.get_cell(1, 2).value, CellValue::Integer(3));
+    }
+
+    #[test]
+    fn test_parse_range() {
+        let sheet = Spreadsheet::create(5, 5).unwrap();
+        assert!(parse_range(&sheet, "A1:B2").is_ok());
+        assert!(parse_range(&sheet, "A").is_err());
+    }
+}

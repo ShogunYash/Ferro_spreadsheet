@@ -168,3 +168,94 @@ impl Spreadsheet {
             }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_valid_dimensions() {
+        let sheet = Spreadsheet::create(5, 5).unwrap();
+        assert_eq!(sheet.rows, 5);
+        assert_eq!(sheet.cols, 5);
+        assert_eq!(sheet.grid.len(), 25);
+        assert_eq!(sheet.viewport_row, 0);
+        assert_eq!(sheet.viewport_col, 0);
+    }
+
+    #[test]
+    fn test_create_invalid_dimensions() {
+        assert!(Spreadsheet::create(0, 5).is_none());
+        assert!(Spreadsheet::create(5, 0).is_none());
+        assert!(Spreadsheet::create(MAX_ROWS + 1, 5).is_none());
+        assert!(Spreadsheet::create(5, MAX_COLS + 1).is_none());
+    }
+
+    #[test]
+    fn test_get_column_name() {
+        let sheet = Spreadsheet::create(1, 1).unwrap();
+        assert_eq!(sheet.get_column_name(0), "A");
+        assert_eq!(sheet.get_column_name(25), "Z");
+        assert_eq!(sheet.get_column_name(26), "AA");
+        assert_eq!(sheet.get_column_name(51), "AZ");
+    }
+
+    #[test]
+    fn test_column_name_to_index() {
+        let sheet = Spreadsheet::create(1, 1).unwrap();
+        assert_eq!(sheet.column_name_to_index("A"), 0);
+        assert_eq!(sheet.column_name_to_index("Z"), 25);
+        assert_eq!(sheet.column_name_to_index("AA"), 26);
+        assert_eq!(sheet.column_name_to_index("AZ"), 51);
+    }
+
+    #[test]
+    fn test_get_cell_and_get_mut_cell() {
+        let mut sheet = Spreadsheet::create(2, 2).unwrap();
+        let cell = sheet.get_mut_cell(0, 0);
+        cell.value = CellValue::Integer(42);
+        assert_eq!(sheet.get_cell(0, 0).value, CellValue::Integer(42));
+        assert_eq!(sheet.get_cell(1, 1).value, CellValue::Integer(0));
+    }
+
+    #[test]
+    fn test_scroll_to_cell_valid() {
+        let mut sheet = Spreadsheet::create(20, 20).unwrap();
+        let status = sheet.scroll_to_cell("B2");
+        assert_eq!(status, CommandStatus::CmdOk);
+        assert_eq!(sheet.viewport_row, 1);
+        assert_eq!(sheet.viewport_col, 1);
+    }
+
+    #[test]
+    fn test_scroll_to_cell_invalid() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        assert_eq!(sheet.scroll_to_cell("F6"), CommandStatus::CmdInvalidCell);
+        assert_eq!(sheet.scroll_to_cell("1A"), CommandStatus::CmdUnrecognized);
+    }
+
+    #[test]
+    fn test_scroll_viewport() {
+        let mut sheet = Spreadsheet::create(50, 50).unwrap();
+        sheet.scroll_viewport('s');
+        assert_eq!(sheet.viewport_row, 10);
+        sheet.scroll_viewport('d');
+        assert_eq!(sheet.viewport_col, 10);
+        sheet.scroll_viewport('w');
+        assert_eq!(sheet.viewport_row, 0);
+        sheet.scroll_viewport('a');
+        assert_eq!(sheet.viewport_col, 0);
+        // Test boundaries
+        sheet.viewport_row = 45;
+        sheet.scroll_viewport('s');
+        assert_eq!(sheet.viewport_row, 40);
+    }
+
+    #[test]
+    fn test_print_spreadsheet_disabled() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        sheet.output_enabled = false;
+        sheet.print_spreadsheet(); // Should not panic
+    }
+}

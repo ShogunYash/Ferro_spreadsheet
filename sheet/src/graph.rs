@@ -153,3 +153,32 @@ pub fn detect_cycle(sheet: &Spreadsheet, parent1: i32, parent2: i32, formula: i1
     }
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_remove_child() {
+        let mut cell = Cell::new();
+        add_child(&mut cell, 0, 1, 5);
+        assert!(cell.children.is_some());
+        remove_child(&mut cell, get_key(0, 1, 5));
+        assert!(cell.children.is_none());
+    }
+
+    #[test]
+    fn test_add_children() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        add_children(&mut sheet, get_key(0, 0, 5), get_key(1, 1, 5), 5, 2, 2); // Range formula
+        assert!(sheet.get_cell(0, 0).children.is_some());
+    }
+
+    // #[test]
+    // fn test_detect_cycle() {
+    //     let mut sheet = Spreadsheet::create(5, 5).unwrap();
+    //     sheet.get_mut_cell(0, 0).parent1 = get_key(0, 1, 5);
+    //     sheet.get_mut_cell(0, 1).parent1 = get_key(0, 0, 5);
+    //     assert!(detect_cycle(&sheet, get_key(0, 1, 5), -1, 82, get_key(0, 0, 5)));
+    // }
+}
