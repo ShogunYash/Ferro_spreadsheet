@@ -58,15 +58,15 @@ pub fn handle_sleep(
         }
         
         // Check for circular reference
-        // if detect_cycle(sheet, pkey, -1, 102, cell_key) {
-        //     let cell: &mut Cell = sheet.get_mut_cell(row, col);
-        //     cell.parent1 = old_parent1;
-        //     cell.parent2 = old_parent2;
-        //     cell.formula = old_formula;
-        //     cell.value = old_value;
-        //     add_children(sheet, old_parent1, old_parent2, old_formula, row, col);
-        //     return CommandStatus::CmdCircularRef;
-        // }
+        if detect_cycle(sheet, pkey, -1, 102, cell_key) {
+            let cell: &mut Cell = sheet.get_mut_cell(row, col);
+            cell.parent1 = old_parent1;
+            cell.parent2 = old_parent2;
+            cell.formula = old_formula;
+            cell.value = old_value;
+            add_children(sheet, old_parent1, old_parent2, old_formula, row, col);
+            return CommandStatus::CmdCircularRef;
+        }
         
         // Add children and update sleep time
         add_children(sheet, pkey, -1, 102, row, col);
