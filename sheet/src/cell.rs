@@ -50,7 +50,7 @@ pub fn parse_cell_reference(sheet: &Spreadsheet, cell_ref: &str) -> Result<(i16,
     
     // Make sure we have at least one letter and digits follow
     if col_name.is_empty() || i >= cell_ref.len() {
-     
+    
         return Err(CommandStatus::CmdUnrecognized);
     }
     
