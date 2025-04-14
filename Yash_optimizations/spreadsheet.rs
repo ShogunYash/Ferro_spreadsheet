@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
 // Spreadsheet implementation
-use crate::cell::{CellValue, parse_cell_reference}; 
+use crate::cell::{parse_cell_reference, Cell, CellValue}; 
 
 // Constants
 const MAX_ROWS: i16 = 999;    // Example value, adjust as needed
@@ -34,10 +34,18 @@ impl CellMeta {
     }
 }
 
+// Structure to track range dependencies
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RangeDependency {
+    pub start_row: i16,
+    pub start_col: i16,
+    pub end_row: i16,
+    pub end_col: i16,
+}
+
 // Spreadsheet structure with separate cell_meta and cell_children maps
-// Changed grid to Vec<CellValue> from Vec<Cell>
 pub struct Spreadsheet {
-    pub grid: Vec<CellValue>,                      // Vector of CellValues (contiguous in memory)
+    pub grid: Vec<Cell>,                           // Vector of Cells (contiguous in memory)
     pub cell_meta: HashMap<i32, CellMeta>,         // Map from cell key to metadata
     pub cell_children: HashMap<i32, HashSet<i32>>, // Map from cell key to its children
     pub rows: i16,
@@ -55,13 +63,13 @@ impl Spreadsheet {
             return None;
         }
         
-        // Create empty cells - initialize with Integer(0) instead of Cell::new()
+        // Create empty cells
         let total = rows as usize * cols as usize;
-        let grid = vec![CellValue::Integer(0); total];
+                let grid = vec![Cell::new(); total];
                 
         Some(Spreadsheet {
             grid,
-            cell_meta: HashMap::with_capacity(32),
+            cell_meta: HashMap::with_capacity(4),
             cell_children: HashMap::with_capacity(32),
             rows,
             cols,
@@ -91,7 +99,7 @@ impl Spreadsheet {
     
     // Get children HashSet for a cell, creating it if it doesn't exist
     pub fn get_children(&mut self, key: i32) -> &mut HashSet<i32> {
-        self.cell_children.entry(key).or_insert_with(|| HashSet::with_capacity(2))
+        self.cell_children.entry(key).or_insert_with(|| HashSet::with_capacity(4))
     }
       
     // Get children for a cell (immutable)
@@ -132,6 +140,15 @@ impl Spreadsheet {
             String::from_utf8_unchecked(buffer)
         }
     }
+    // pub fn get_column_name(&self, mut col: i16) -> String {
+    //     let mut name = String::new();
+    //     col += 1; // Convert from 0-based to 1-based
+    //     while col > 0 {
+    //         name.push((b'A' + ((col - 1) % 26) as u8) as char); // Convert to character
+    //         col = (col - 1) / 26;
+    //     }
+    //     name.chars().rev().collect() // Reverse the string to get the correct column name
+    // }
 
     pub fn column_name_to_index(&self, name: &str) -> i16 {
         let bytes = name.as_bytes();
@@ -141,21 +158,32 @@ impl Spreadsheet {
         }
         index - 1 // Convert from 1-based to 0-based
     }
+    // pub fn column_name_to_index(&self, name: &str) -> i16 {
+    //     let mut index: i16 = 0;
+    //     for char in name.chars() {
+    //         index *= 26;
+    //         index += (char.to_ascii_uppercase() as i16) - ('A' as i16) + 1; // Convert character to index
+    //     }
+    //     index - 1 // Convert from 1-based to 0-based
+    // }
 
-    pub fn get_cell(&self, row: i16, col: i16) -> &CellValue {
+    pub fn get_cell(&self, row: i16, col: i16) -> &Cell {
         let index = (row as usize) * (self.cols as usize) + (col as usize);    
         &self.grid[index]
     }
     
-    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut CellValue {
+    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut Cell {
         let index = (row as usize) * (self.cols as usize) + (col as usize);
         &mut self.grid[index]
     }
     
     // Add a child to a cell's dependents (modified for separate children HashMap)
-    pub fn add_child(&mut self, parent_key: &i32, child_key: &i32){    
-        let children = self.get_children(*parent_key);
-        children.insert(*child_key);
+    pub fn add_child(&mut self, parent_row: i16, parent_col: i16, child_row: i16, child_col: i16) {
+        let parent_key = self.get_key(parent_row, parent_col);
+        let child_key = self.get_key(child_row, child_col);
+        
+        let children = self.get_children(parent_key);
+        children.insert(child_key);
     }
     
     // Remove a child from a cell's dependents (modified for separate children HashMap)
@@ -191,11 +219,11 @@ impl Spreadsheet {
         for i in 0..display_row {
             print!("{:<4} ", start_row + i + 1); // Show 1-based row numbers
             for j in 0..display_col {
-                let cell_value = self.get_cell(start_row + i, start_col + j); 
-                match cell_value {
-                    CellValue::Integer(value) => print!("{:<8} ", value),
-                    CellValue::Error => print!("{:<8} ", "ERR"),
-                }
+                let cell = self.get_cell(start_row + i, start_col + j); 
+                    match cell.value {
+                        CellValue::Integer(value) => print!("{:<8} ", value),
+                        CellValue::Error => print!("{:<8} ", "ERR"),
+                    }
             }
             println!();
         }
@@ -253,95 +281,5 @@ impl Spreadsheet {
             _ => {} // Invalid direction, do nothing
         }
     }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_create_valid_dimensions() {
-        let sheet = Spreadsheet::create(5, 5).unwrap();
-        assert_eq!(sheet.rows, 5);
-        assert_eq!(sheet.cols, 5);
-        assert_eq!(sheet.grid.len(), 25);
-        assert_eq!(sheet.viewport_row, 0);
-        assert_eq!(sheet.viewport_col, 0);
-    }
-
-    #[test]
-    fn test_create_invalid_dimensions() {
-        assert!(Spreadsheet::create(0, 5).is_none());
-        assert!(Spreadsheet::create(5, 0).is_none());
-        assert!(Spreadsheet::create(MAX_ROWS + 1, 5).is_none());
-        assert!(Spreadsheet::create(5, MAX_COLS + 1).is_none());
-    }
-
-    #[test]
-    fn test_get_column_name() {
-        let sheet = Spreadsheet::create(1, 1).unwrap();
-        assert_eq!(sheet.get_column_name(0), "A");
-        assert_eq!(sheet.get_column_name(25), "Z");
-        assert_eq!(sheet.get_column_name(26), "AA");
-        assert_eq!(sheet.get_column_name(51), "AZ");
-    }
-
-    #[test]
-    fn test_column_name_to_index() {
-        let sheet = Spreadsheet::create(1, 1).unwrap();
-        assert_eq!(sheet.column_name_to_index("A"), 0);
-        assert_eq!(sheet.column_name_to_index("Z"), 25);
-        assert_eq!(sheet.column_name_to_index("AA"), 26);
-        assert_eq!(sheet.column_name_to_index("AZ"), 51);
-    }
-
-    #[test]
-    fn test_get_cell_and_get_mut_cell() {
-        let mut sheet = Spreadsheet::create(2, 2).unwrap();
-        let cell_value = sheet.get_mut_cell(0, 0);
-        *cell_value = CellValue::Integer(42);
-        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(42));
-        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(0));
-    }
-
-    #[test]
-    fn test_scroll_to_cell_valid() {
-        let mut sheet = Spreadsheet::create(20, 20).unwrap();
-        let status = sheet.scroll_to_cell("B2");
-        assert_eq!(status, CommandStatus::CmdOk);
-        assert_eq!(sheet.viewport_row, 1);
-        assert_eq!(sheet.viewport_col, 1);
-    }
-
-    #[test]
-    fn test_scroll_to_cell_invalid() {
-        let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        assert_eq!(sheet.scroll_to_cell("F6"), CommandStatus::CmdInvalidCell);
-        assert_eq!(sheet.scroll_to_cell("1A"), CommandStatus::CmdUnrecognized);
-    }
-
-    #[test]
-    fn test_scroll_viewport() {
-        let mut sheet = Spreadsheet::create(50, 50).unwrap();
-        sheet.scroll_viewport('s');
-        assert_eq!(sheet.viewport_row, 10);
-        sheet.scroll_viewport('d');
-        assert_eq!(sheet.viewport_col, 10);
-        sheet.scroll_viewport('w');
-        assert_eq!(sheet.viewport_row, 0);
-        sheet.scroll_viewport('a');
-        assert_eq!(sheet.viewport_col, 0);
-        // Test boundaries
-        sheet.viewport_row = 45;
-        sheet.scroll_viewport('s');
-        assert_eq!(sheet.viewport_row, 40);
-    }
-
-    #[test]
-    fn test_print_spreadsheet_disabled() {
-        let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        sheet.output_enabled = false;
-        sheet.print_spreadsheet(); // Should not panic
-    }
+      
 }

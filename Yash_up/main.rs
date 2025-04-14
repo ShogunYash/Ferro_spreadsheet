@@ -8,42 +8,49 @@ use std::io::{self, Write};
 use std::process;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use sys_info;  // Add the system information library
 
 use spreadsheet::Spreadsheet;
 use spreadsheet::CommandStatus;
 use evaluator::handle_command;
 
-// Updated memory usage structure
+// Add memory usage functionality
 struct MemoryUsage {
     physical_mem: u64,
 }
 
-// Improved cross-platform memory usage function using sys-info crate
 fn memory_stats() -> Option<MemoryUsage> {
-    match sys_info::mem_info() {
-        Ok(mem_info) => {
-            // Calculate memory used by the process
-            // On most systems this returns the system-wide memory usage
-            // For process-specific usage, we use a percentage estimate
-            
-            // Calculate used memory in bytes
-            let used_mem = (mem_info.total - mem_info.free) * 1024; // Convert KB to bytes
-            
-            // Approximate the process memory as a fraction of total used memory
-            // This is a rough estimate - actual process memory would require platform-specific code
-            let process_estimate = used_mem / 50; // Assuming our process uses ~2% of used memory
-            
-            Some(MemoryUsage {
-                physical_mem: process_estimate,
-            })
-        },
-        Err(_) => {
-            // Fallback if memory info retrieval fails
-            Some(MemoryUsage {
-                physical_mem: 10 * 1024 * 1024, // 10 MB placeholder
-            })
+    // Simple implementation that reads from /proc/self/statm on Linux
+    // or returns a dummy value on other platforms
+    #[cfg(target_os = "linux")]
+    {
+        use std::fs::File;
+        use std::io::Read;
+        
+        let mut buffer = String::new();
+        if let Ok(mut file) = File::open("/proc/self/statm") {
+            if file.read_to_string(&mut buffer).is_ok() {
+                let values: Vec<&str> = buffer.split_whitespace().collect();
+                if values.len() >= 2 {
+                    if let Ok(vm_pages) = values[0].parse::<u64>() {
+                        // Convert from pages to bytes (assume 4KB page size)
+                        let page_size = 4096;
+                        return Some(MemoryUsage {
+                            physical_mem: vm_pages * page_size,
+                        });
+                    }
+                }
+            }
         }
+        None
+    }
+    
+    // For non-Linux platforms, provide a dummy implementation
+    #[cfg(not(target_os = "linux"))]
+    {
+        // Return a placeholder value for platforms that don't support /proc
+        Some(MemoryUsage {
+            physical_mem: 10 * 1024 * 1024, // 10 MB placeholder
+        })
     }
 }
 

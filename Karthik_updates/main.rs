@@ -2,48 +2,56 @@ mod cell;
 mod spreadsheet;
 mod evaluator;
 mod formula;
+mod linked_list;
 mod graph;
 use std::env;
 use std::io::{self, Write};
 use std::process;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use sys_info;  // Add the system information library
 
 use spreadsheet::Spreadsheet;
 use spreadsheet::CommandStatus;
 use evaluator::handle_command;
 
-// Updated memory usage structure
+// Add memory usage functionality
 struct MemoryUsage {
     physical_mem: u64,
 }
 
-// Improved cross-platform memory usage function using sys-info crate
 fn memory_stats() -> Option<MemoryUsage> {
-    match sys_info::mem_info() {
-        Ok(mem_info) => {
-            // Calculate memory used by the process
-            // On most systems this returns the system-wide memory usage
-            // For process-specific usage, we use a percentage estimate
-            
-            // Calculate used memory in bytes
-            let used_mem = (mem_info.total - mem_info.free) * 1024; // Convert KB to bytes
-            
-            // Approximate the process memory as a fraction of total used memory
-            // This is a rough estimate - actual process memory would require platform-specific code
-            let process_estimate = used_mem / 50; // Assuming our process uses ~2% of used memory
-            
-            Some(MemoryUsage {
-                physical_mem: process_estimate,
-            })
-        },
-        Err(_) => {
-            // Fallback if memory info retrieval fails
-            Some(MemoryUsage {
-                physical_mem: 10 * 1024 * 1024, // 10 MB placeholder
-            })
+    // Simple implementation that reads from /proc/self/statm on Linux
+    // or returns a dummy value on other platforms
+    #[cfg(target_os = "linux")]
+    {
+        use std::fs::File;
+        use std::io::Read;
+        
+        let mut buffer = String::new();
+        if let Ok(mut file) = File::open("/proc/self/statm") {
+            if file.read_to_string(&mut buffer).is_ok() {
+                let values: Vec<&str> = buffer.split_whitespace().collect();
+                if values.len() >= 2 {
+                    if let Ok(vm_pages) = values[0].parse::<u64>() {
+                        // Convert from pages to bytes (assume 4KB page size)
+                        let page_size = 4096;
+                        return Some(MemoryUsage {
+                            physical_mem: vm_pages * page_size,
+                        });
+                    }
+                }
+            }
         }
+        None
+    }
+    
+    // For non-Linux platforms, provide a dummy implementation
+    #[cfg(not(target_os = "linux"))]
+    {
+        // Return a placeholder value for platforms that don't support /proc
+        Some(MemoryUsage {
+            physical_mem: 10 * 1024 * 1024, // 10 MB placeholder
+        })
     }
 }
 
@@ -63,10 +71,29 @@ fn main() {
         eprintln!("Invalid number for columns");
         process::exit(1);
     });
-        
+    
+    println!("Creating spreadsheet with {} rows and {} columns...", rows, cols);
+    println!("This may take a moment for large spreadsheets.");
+    
     let mut sleep_time = 0.0; // Initialize sleep time
+    let mut last_time = 0.0; // Initialize last time
     let start = Instant::now();
+    
+    // For very large spreadsheet sizes, warn the user
+    // if (rows as i64) * (cols as i64) > 1_000_000 {
+    //     println!("Warning: Creating a large spreadsheet with {} cells", (rows as i64) * (cols as i64));
+    //     println!("This may consume significant memory.");
+    //     print!("Do you want to continue? (y/n) ");
+    //     io::stdout().flush().unwrap();
         
+    //     let mut input = String::new();
+    //     io::stdin().read_line(&mut input).unwrap();
+    //     if input.trim().to_lowercase() != "y" {
+    //         println!("Operation cancelled.");
+    //         process::exit(0);
+    //     }
+    // }
+    
     let mut sheet = match Spreadsheet::create(rows, cols) {
         Some(s) => s,
         None => {
@@ -76,13 +103,14 @@ fn main() {
         }
     };
     let mut command_time = start.elapsed().as_secs_f64();
-    let mut last_time = command_time; // Update last_time with the command time
+    last_time = command_time; // Update last_time with the command time
     
     // println!("Spreadsheet created in {:.2} seconds.", command_time);
+    
     let mut last_status = "ok"; // Placeholder for last status
+    let mut status = CommandStatus::CmdOk; // Placeholder for status
     let mut input = String::with_capacity(128);
     
-    // Main loop for command input
     loop {
         sheet.print_spreadsheet();
         if let Some(usage) = memory_stats() {
@@ -102,20 +130,20 @@ fn main() {
         
         // Process the command and measure execution time
         let start = Instant::now();
-        // Pass by reference instead of cloning
-        let status = handle_command(&mut sheet, trimmed, &mut sleep_time);
-        command_time = start.elapsed().as_secs_f64();
-    
+        status = handle_command(&mut sheet, input.clone(), &mut sleep_time);
+        command_time= start.elapsed().as_secs_f64();
+
         if sleep_time <= command_time {
-            sleep_time = 0.0;
-        } else {
+            sleep_time=0.0;
+        }
+        else {
             sleep_time -= command_time;
         }
         last_time = command_time + sleep_time;
         if sleep_time > 0.0 {
             sleep(Duration::from_secs_f64(sleep_time));
         }
-        sleep_time = 0.0;
+        sleep_time= 0.0;
     
         // Update last_status based on the current command status
         last_status = match status {

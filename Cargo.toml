@@ -31,4 +31,4 @@ panic = "abort"     # Removes panic unwinding code
 incremental = false # Disables incremental compilation in release
 
 [dependencies]
-# Dependencies would go here
+sys-info = "0.9"  # Cross-platform system information
