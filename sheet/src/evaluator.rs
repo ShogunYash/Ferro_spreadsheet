@@ -422,7 +422,7 @@ pub fn evaluate_formula(
             return CommandStatus::CmdCircularRef;
         }
 
-        // // Add children and evaluate the appropriate function
+        // Add children and evaluate the appropriate function
         add_children(sheet, parent1, parent2, formula_type, row, col);
         
         match formula_type {
