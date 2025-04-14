@@ -1,4 +1,4 @@
-use crate::cell::{Cell, CellValue, parse_cell_reference};
+use crate::cell::{CellValue, parse_cell_reference};
 use crate::spreadsheet::{Spreadsheet, CommandStatus};
 pub struct Range {
     pub start_row: i16,
@@ -14,20 +14,18 @@ pub fn sum_value(sheet: &mut Spreadsheet, row: i16, col: i16, range: &Range) -> 
     // For smaller ranges, use the original approach
     for i in range.start_row..=range.end_row {
         for j in range.start_col..=range.end_col {
-            let ref_cell = sheet.get_cell(i, j);
-            if let CellValue::Integer(value) = ref_cell.value {
+            let ref_cell_value = sheet.get_cell(i, j);
+            if let CellValue::Integer(value) = ref_cell_value {
                 sum += value;
             } else {
-                let cell: &mut Cell = sheet.get_mut_cell(row, col);
-                cell.value = CellValue::Error;
+                *sheet.get_mut_cell(row, col) = CellValue::Error;
                 return CommandStatus::CmdOk;
             }
         }
     }
     
     // Now set the result
-    let cell: &mut Cell = sheet.get_mut_cell(row, col);
-    cell.value = CellValue::Integer(sum);
+    *sheet.get_mut_cell(row, col) = CellValue::Integer(sum);
     CommandStatus::CmdOk
 }
 
@@ -35,16 +33,16 @@ pub fn sum_value(sheet: &mut Spreadsheet, row: i16, col: i16, range: &Range) -> 
 pub fn eval_variance(sheet: &mut Spreadsheet, row:i16 , col:i16 , range: &Range) -> CommandStatus {
     let count = ((range.end_row - range.start_row + 1) as i32) * ((range.end_col - range.start_col + 1) as i32);
     sum_value(sheet, row, col, range);
-    let cell: &mut Cell = sheet.get_mut_cell(row, col);
+    let cell_value = sheet.get_mut_cell(row, col);
 
-    if let CellValue::Integer(value) = cell.value {
-        cell.value = CellValue::Integer((value / count) as i32);
+    if let CellValue::Integer(value) = cell_value {
+        *cell_value = CellValue::Integer((*value / count) as i32);
     }
     else {
         return CommandStatus::CmdOk;
     }
 
-    let cell_value = match cell.value {
+    let mean_value = match *sheet.get_cell(row, col) {
         CellValue::Integer(value) => value as f64,
         _ => return CommandStatus::CmdOk,
     };
@@ -52,17 +50,15 @@ pub fn eval_variance(sheet: &mut Spreadsheet, row:i16 , col:i16 , range: &Range)
     let mut variance = 0.0;
     for i in range.start_row..=range.end_row {
         for j in range.start_col..=range.end_col {
-            let ref_cell = sheet.get_cell(i, j);
-            if let CellValue::Integer(value) = ref_cell.value {
-                variance += ((value as f64) - (cell_value)).powi(2);
+            if let CellValue::Integer(value) = *sheet.get_cell(i, j) {
+                variance += ((value as f64) - (mean_value)).powi(2);
             }
         }
     }
 
     variance /= count as f64;
     let std_dev = (variance.sqrt() + 0.5) as i32;
-    let cell: &mut Cell = sheet.get_mut_cell(row, col);
-    cell.value = CellValue::Integer(std_dev);
+    *sheet.get_mut_cell(row, col) = CellValue::Integer(std_dev);
     CommandStatus::CmdOk
 }
 
@@ -72,20 +68,17 @@ pub fn eval_min(sheet: &mut Spreadsheet, row: i16, col: i16, range: &Range) -> C
     // First collect all values (immutable borrows)
     for r in range.start_row..=range.end_row {
         for c in range.start_col..=range.end_col {
-            let parent_cell= sheet.get_cell(r, c);
-                if let CellValue::Integer(value) = parent_cell.value {
-                    min_value = std::cmp::min(min_value, value);
-                } else {
-                    let cell: &mut Cell = sheet.get_mut_cell(row, col);
-                    cell.value = CellValue::Error;
-                    return CommandStatus::CmdOk;
-                }
+            if let CellValue::Integer(value) = sheet.get_cell(r, c) {
+                min_value = std::cmp::min(min_value, *value);
+            } else {
+                *sheet.get_mut_cell(row, col) = CellValue::Error;
+                return CommandStatus::CmdOk;
+            }
         }
     }
     
     // Now get the mutable cell and set its value (mutable borrow)
-    let cell = sheet.get_mut_cell(row, col);    
-    cell.value = CellValue::Integer(min_value);
+    *sheet.get_mut_cell(row, col) = CellValue::Integer(min_value);
     CommandStatus::CmdOk
 }
 
@@ -95,20 +88,17 @@ pub fn eval_max(sheet: &mut Spreadsheet, row: i16, col: i16, range: &Range) -> C
     // First collect all values (immutable borrows)
     for r in range.start_row..=range.end_row {
         for c in range.start_col..=range.end_col {
-            let parent_cell= sheet.get_cell(r, c); 
-                if let CellValue::Integer(value) = parent_cell.value {
-                    max_value = std::cmp::max(max_value, value);
-                } else {
-                    let cell: &mut Cell = sheet.get_mut_cell(row, col);
-                    cell.value = CellValue::Error;
-                    return CommandStatus::CmdOk;
-                }
+            if let CellValue::Integer(value) = sheet.get_cell(r, c) {
+                max_value = std::cmp::max(max_value, *value);
+            } else {
+                *sheet.get_mut_cell(row, col) = CellValue::Error;
+                return CommandStatus::CmdOk;
+            }
         }
     }
     
     // Now get the mutable cell and set its value (mutable borrow)
-    let cell = sheet.get_mut_cell(row, col);    
-    cell.value = CellValue::Integer(max_value);
+    *sheet.get_mut_cell(row, col) = CellValue::Integer(max_value);
     CommandStatus::CmdOk
 }
 
@@ -165,18 +155,18 @@ mod tests {
     #[test]
     fn test_sum_value() {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        sheet.get_mut_cell(0, 0).value = CellValue::Integer(1);
-        sheet.get_mut_cell(0, 1).value = CellValue::Integer(2);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);
         let range = Range { start_row: 0, start_col: 0, end_row: 0, end_col: 1 };
         assert_eq!(sum_value(&mut sheet, 1, 1, &range), CommandStatus::CmdOk);
-        assert_eq!(sheet.get_cell(1, 1).value, CellValue::Integer(3));
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3));
     }
 
     #[test]
     fn test_eval_variance() {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        sheet.get_mut_cell(0, 0).value = CellValue::Integer(2);
-        sheet.get_mut_cell(0, 1).value = CellValue::Integer(4);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(2);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(4);
         let range = Range { start_row: 0, start_col: 0, end_row: 0, end_col: 1 };
         assert_eq!(eval_variance(&mut sheet, 1, 1, &range), CommandStatus::CmdOk);
     }
@@ -184,13 +174,13 @@ mod tests {
     #[test]
     fn test_eval_min_max() {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        sheet.get_mut_cell(0, 0).value = CellValue::Integer(1);
-        sheet.get_mut_cell(0, 1).value = CellValue::Integer(3);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(3);
         let range = Range { start_row: 0, start_col: 0, end_row: 0, end_col: 1 };
         assert_eq!(eval_min(&mut sheet, 1, 1, &range), CommandStatus::CmdOk);
-        assert_eq!(sheet.get_cell(1, 1).value, CellValue::Integer(1));
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(1));
         assert_eq!(eval_max(&mut sheet, 1, 2, &range), CommandStatus::CmdOk);
-        assert_eq!(sheet.get_cell(1, 2).value, CellValue::Integer(3));
+        assert_eq!(*sheet.get_cell(1, 2), CellValue::Integer(3));
     }
 
     #[test]
