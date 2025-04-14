@@ -3,31 +3,28 @@ use std::collections::HashSet;
 
 pub fn add_children(sheet: &mut Spreadsheet, cell1: i32, cell2: i32, formula: i16, row: i16, col: i16) {
     let rem = formula % 10;
-    
+    let child_key = sheet.get_key(row, col);
     if formula == -1 {
         return;
     }
     
     if rem == 0 {
-        let (parent1_row, parent1_col) = sheet.get_row_col(cell1);
-        let (parent2_row, parent2_col) = sheet.get_row_col(cell2);
-        sheet.add_child(parent1_row, parent1_col, row, col);
-        sheet.add_child(parent2_row, parent2_col, row, col);
+        sheet.add_child(&cell1, &child_key);
+        sheet.add_child(&cell2, &child_key);
     }
     else if rem == 2 {
-        let (parent1_row, parent1_col) = sheet.get_row_col(cell1);
-        sheet.add_child(parent1_row, parent1_col, row, col);
+        sheet.add_child(&cell1, &child_key);
     }
     else if rem == 3 {
-        let (parent2_row, parent2_col) = sheet.get_row_col(cell2);
-        sheet.add_child(parent2_row, parent2_col, row, col);
+        sheet.add_child(&cell2, &child_key);
     }
     else {
         let (start_row, start_col) = sheet.get_row_col(cell1);
         let (end_row, end_col) = sheet.get_row_col(cell2);
         for i in start_row..=end_row {
             for j in start_col..=end_col {
-                sheet.add_child(i, j, row, col);
+                let parent_key = sheet.get_key(i, j);
+                sheet.add_child(&parent_key, &child_key);
             }
         }
     }
@@ -42,8 +39,10 @@ pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
         return; // No metadata, no parents to remove
     }
     
-    let meta = sheet.cell_meta.get(&child_key).unwrap();
-    
+    let meta = match sheet.cell_meta.get(&child_key) {
+        Some(meta) => meta,
+        None => return, // No metadata, no parents to remove
+    };
     if meta.formula == -1 {
         return;
     }
@@ -69,21 +68,18 @@ pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
         sheet.remove_child(parent2, child_key);
     }
     else if rem == 2 {
-        let parent1 = meta.parent1;
-        sheet.remove_child(parent1, child_key);
+        sheet.remove_child(meta.parent1, child_key);
     }
     else if rem == 3 {
-        let parent2 = meta.parent2;
-        sheet.remove_child(parent2, child_key);
+        sheet.remove_child(meta.parent2, child_key);
     }
 }
-
 
 pub fn detect_cycle(sheet: &Spreadsheet, parent1: i32, parent2: i32, formula: i16, target_key: i32) -> bool {
     let rem = formula % 10;
     
     let mut visited = HashSet::with_capacity(32);
-    let mut stack = Vec::with_capacity(16); // Pre-allocate with initial size
+    let mut stack = Vec::with_capacity(32); // Pre-allocate with initial size
     stack.push(target_key);
     
     // Extract coordinates for range operations if needed
@@ -166,11 +162,11 @@ pub fn detect_cycle(sheet: &Spreadsheet, parent1: i32, parent2: i32, formula: i1
 //         assert!(sheet.get_cell(0, 0).children.is_some());
 //     }
 
-    // #[test]
-    // fn test_detect_cycle() {
-    //     let mut sheet = Spreadsheet::create(5, 5).unwrap();
-    //     sheet.get_mut_cell(0, 0).parent1 = get_key(0, 1, 5);
-    //     sheet.get_mut_cell(0, 1).parent1 = get_key(0, 0, 5);
-    //     assert!(detect_cycle(&sheet, get_key(0, 1, 5), -1, 82, get_key(0, 0, 5)));
-    // }
+//     #[test]
+//     fn test_detect_cycle() {
+//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
+//         sheet.get_mut_cell(0, 0).parent1 = get_key(0, 1, 5);
+//         sheet.get_mut_cell(0, 1).parent1 = get_key(0, 0, 5);
+//         assert!(detect_cycle(&sheet, get_key(0, 1, 5), -1, 82, get_key(0, 0, 5)));
+//     }
 // }
