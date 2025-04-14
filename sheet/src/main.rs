@@ -2,7 +2,6 @@ mod cell;
 mod spreadsheet;
 mod evaluator;
 mod formula;
-mod linked_list;
 mod graph;
 use std::env;
 use std::io::{self, Write};
@@ -71,29 +70,10 @@ fn main() {
         eprintln!("Invalid number for columns");
         process::exit(1);
     });
-    
-    println!("Creating spreadsheet with {} rows and {} columns...", rows, cols);
-    println!("This may take a moment for large spreadsheets.");
-    
-    let mut sleep_time = 0.0; // Initialize sleep time
-    let mut last_time = 0.0; // Initialize last time
-    let start = Instant::now();
-    
-    // For very large spreadsheet sizes, warn the user
-    // if (rows as i64) * (cols as i64) > 1_000_000 {
-    //     println!("Warning: Creating a large spreadsheet with {} cells", (rows as i64) * (cols as i64));
-    //     println!("This may consume significant memory.");
-    //     print!("Do you want to continue? (y/n) ");
-    //     io::stdout().flush().unwrap();
         
-    //     let mut input = String::new();
-    //     io::stdin().read_line(&mut input).unwrap();
-    //     if input.trim().to_lowercase() != "y" {
-    //         println!("Operation cancelled.");
-    //         process::exit(0);
-    //     }
-    // }
-    
+    let mut sleep_time = 0.0; // Initialize sleep time
+    let start = Instant::now();
+        
     let mut sheet = match Spreadsheet::create(rows, cols) {
         Some(s) => s,
         None => {
@@ -103,14 +83,13 @@ fn main() {
         }
     };
     let mut command_time = start.elapsed().as_secs_f64();
-    last_time = command_time; // Update last_time with the command time
+    let mut last_time = command_time; // Update last_time with the command time
     
     // println!("Spreadsheet created in {:.2} seconds.", command_time);
-    
     let mut last_status = "ok"; // Placeholder for last status
-    let mut status = CommandStatus::CmdOk; // Placeholder for status
     let mut input = String::with_capacity(128);
     
+    // Main loop for command input
     loop {
         sheet.print_spreadsheet();
         if let Some(usage) = memory_stats() {
@@ -130,20 +109,20 @@ fn main() {
         
         // Process the command and measure execution time
         let start = Instant::now();
-        status = handle_command(&mut sheet, input.clone(), &mut sleep_time);
-        command_time= start.elapsed().as_secs_f64();
-
+        // Pass by reference instead of cloning
+        let status = handle_command(&mut sheet, trimmed, &mut sleep_time);
+        command_time = start.elapsed().as_secs_f64();
+    
         if sleep_time <= command_time {
-            sleep_time=0.0;
-        }
-        else {
+            sleep_time = 0.0;
+        } else {
             sleep_time -= command_time;
         }
         last_time = command_time + sleep_time;
         if sleep_time > 0.0 {
             sleep(Duration::from_secs_f64(sleep_time));
         }
-        sleep_time= 0.0;
+        sleep_time = 0.0;
     
         // Update last_status based on the current command status
         last_status = match status {
