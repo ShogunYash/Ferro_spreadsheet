@@ -37,8 +37,8 @@ impl CellMeta {
 // Changed grid to Vec<CellValue> from Vec<Cell>
 pub struct Spreadsheet {
     pub grid: Vec<CellValue>,                      // Vector of CellValues (contiguous in memory)
-    pub cell_meta: HashMap<i32, CellMeta>,         // Map from cell key to metadata
     pub children: Vec<HashSet<i32>>,               // Vector of HashSets for children (one per cell)
+    pub cell_meta: HashMap<i32, CellMeta>,         // Map from cell key to metadata
     pub rows: i16,
     pub cols: i16,
     viewport_row: i16,
@@ -63,8 +63,8 @@ impl Spreadsheet {
                 
         Some(Spreadsheet {
             grid,
-            cell_meta: HashMap::with_capacity(1024),
             children,
+            cell_meta: HashMap::with_capacity(1024),
             rows,
             cols,
             viewport_row: 0,
