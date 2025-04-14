@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
 // Spreadsheet implementation
-use crate::cell::{parse_cell_reference, Cell, CellValue}; 
+use crate::cell::{CellValue, parse_cell_reference}; 
 
 // Constants
 const MAX_ROWS: i16 = 999;    // Example value, adjust as needed
@@ -34,18 +34,10 @@ impl CellMeta {
     }
 }
 
-// Structure to track range dependencies
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RangeDependency {
-    pub start_row: i16,
-    pub start_col: i16,
-    pub end_row: i16,
-    pub end_col: i16,
-}
-
 // Spreadsheet structure with separate cell_meta and cell_children maps
+// Changed grid to Vec<CellValue> from Vec<Cell>
 pub struct Spreadsheet {
-    pub grid: Vec<Cell>,                           // Vector of Cells (contiguous in memory)
+    pub grid: Vec<CellValue>,                      // Vector of CellValues (contiguous in memory)
     pub cell_meta: HashMap<i32, CellMeta>,         // Map from cell key to metadata
     pub cell_children: HashMap<i32, HashSet<i32>>, // Map from cell key to its children
     pub rows: i16,
@@ -63,13 +55,13 @@ impl Spreadsheet {
             return None;
         }
         
-        // Create empty cells
+        // Create empty cells - initialize with Integer(0) instead of Cell::new()
         let total = rows as usize * cols as usize;
-                let grid = vec![Cell::new(); total];
+        let grid = vec![CellValue::Integer(0); total];
                 
         Some(Spreadsheet {
             grid,
-            cell_meta: HashMap::with_capacity(4),
+            cell_meta: HashMap::with_capacity(32),
             cell_children: HashMap::with_capacity(32),
             rows,
             cols,
@@ -99,7 +91,7 @@ impl Spreadsheet {
     
     // Get children HashSet for a cell, creating it if it doesn't exist
     pub fn get_children(&mut self, key: i32) -> &mut HashSet<i32> {
-        self.cell_children.entry(key).or_insert_with(|| HashSet::with_capacity(4))
+        self.cell_children.entry(key).or_insert_with(|| HashSet::with_capacity(2))
     }
       
     // Get children for a cell (immutable)
@@ -140,15 +132,6 @@ impl Spreadsheet {
             String::from_utf8_unchecked(buffer)
         }
     }
-    // pub fn get_column_name(&self, mut col: i16) -> String {
-    //     let mut name = String::new();
-    //     col += 1; // Convert from 0-based to 1-based
-    //     while col > 0 {
-    //         name.push((b'A' + ((col - 1) % 26) as u8) as char); // Convert to character
-    //         col = (col - 1) / 26;
-    //     }
-    //     name.chars().rev().collect() // Reverse the string to get the correct column name
-    // }
 
     pub fn column_name_to_index(&self, name: &str) -> i16 {
         let bytes = name.as_bytes();
@@ -158,32 +141,21 @@ impl Spreadsheet {
         }
         index - 1 // Convert from 1-based to 0-based
     }
-    // pub fn column_name_to_index(&self, name: &str) -> i16 {
-    //     let mut index: i16 = 0;
-    //     for char in name.chars() {
-    //         index *= 26;
-    //         index += (char.to_ascii_uppercase() as i16) - ('A' as i16) + 1; // Convert character to index
-    //     }
-    //     index - 1 // Convert from 1-based to 0-based
-    // }
 
-    pub fn get_cell(&self, row: i16, col: i16) -> &Cell {
+    pub fn get_cell(&self, row: i16, col: i16) -> &CellValue {
         let index = (row as usize) * (self.cols as usize) + (col as usize);    
         &self.grid[index]
     }
     
-    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut Cell {
+    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut CellValue {
         let index = (row as usize) * (self.cols as usize) + (col as usize);
         &mut self.grid[index]
     }
     
     // Add a child to a cell's dependents (modified for separate children HashMap)
-    pub fn add_child(&mut self, parent_row: i16, parent_col: i16, child_row: i16, child_col: i16) {
-        let parent_key = self.get_key(parent_row, parent_col);
-        let child_key = self.get_key(child_row, child_col);
-        
-        let children = self.get_children(parent_key);
-        children.insert(child_key);
+    pub fn add_child(&mut self, parent_key: &i32, child_key: &i32){    
+        let children = self.get_children(*parent_key);
+        children.insert(*child_key);
     }
     
     // Remove a child from a cell's dependents (modified for separate children HashMap)
@@ -219,11 +191,11 @@ impl Spreadsheet {
         for i in 0..display_row {
             print!("{:<4} ", start_row + i + 1); // Show 1-based row numbers
             for j in 0..display_col {
-                let cell = self.get_cell(start_row + i, start_col + j); 
-                    match cell.value {
-                        CellValue::Integer(value) => print!("{:<8} ", value),
-                        CellValue::Error => print!("{:<8} ", "ERR"),
-                    }
+                let cell_value = self.get_cell(start_row + i, start_col + j); 
+                match cell_value {
+                    CellValue::Integer(value) => print!("{:<8} ", value),
+                    CellValue::Error => print!("{:<8} ", "ERR"),
+                }
             }
             println!();
         }
@@ -327,10 +299,10 @@ mod tests {
     #[test]
     fn test_get_cell_and_get_mut_cell() {
         let mut sheet = Spreadsheet::create(2, 2).unwrap();
-        let cell = sheet.get_mut_cell(0, 0);
-        cell.value = CellValue::Integer(42);
-        assert_eq!(sheet.get_cell(0, 0).value, CellValue::Integer(42));
-        assert_eq!(sheet.get_cell(1, 1).value, CellValue::Integer(0));
+        let cell_value = sheet.get_mut_cell(0, 0);
+        *cell_value = CellValue::Integer(42);
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(42));
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(0));
     }
 
     #[test]
