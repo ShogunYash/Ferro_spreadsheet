@@ -23,9 +23,6 @@ pub fn handle_sleep(
             return CommandStatus::CmdCircularRef;
         }
         
-        // Get the value from parent cell
-        let parent_value = sheet.get_cell(target_row, target_col).value.clone();
-        
         // Store old metadata and value for possible restoration
         let old_meta = sheet.cell_meta.get(&cell_key).cloned();
 
@@ -52,11 +49,15 @@ pub fn handle_sleep(
         
         // Add children and update sleep time
         add_children(sheet, pkey, -1, 102, row, col);
-        // Update cell value
-        sheet.get_mut_cell(row, col).value = parent_value.clone();
         // Add to sleep time if integer
+        // Get the value from parent cell
+        let parent_value = sheet.get_cell(target_row, target_col);
         if let CellValue::Integer(val) = parent_value {
-            *sleep_time += val as f64;
+            *sleep_time += *val as f64;
+            *sheet.get_mut_cell(row, col) = CellValue::Integer(*val);
+        }
+        else{
+            *sheet.get_mut_cell(row, col) = CellValue::Error;
         }
     } 
     // Handle numeric literal case
@@ -64,14 +65,9 @@ pub fn handle_sleep(
         // Remove all parents and update cell in one sequence
         remove_all_parents(sheet, row, col);
         // Update cell value
-        sheet.get_mut_cell(row, col).value = CellValue::Integer(val);
-
-        // Update metadata directly through get_cell_meta
-        let meta = sheet.get_cell_meta(row, col);
-        meta.formula = -1;
-        meta.parent1 = -1;
-        meta.parent2 = -1;
-
+        *sheet.get_mut_cell(row, col) = CellValue::Integer(val);
+        // Delete the cell meta entry
+        sheet.cell_meta.remove(&cell_key);
         // Update sleep time
         *sleep_time += val as f64;
     }
@@ -94,16 +90,11 @@ pub fn evaluate_arithmetic(
     if let Ok(number) = expr.parse::<i32>() {
         remove_all_parents(sheet, row, col);
         
-        let cell = sheet.get_mut_cell(row, col);
-        cell.value = CellValue::Integer(number);
+        *sheet.get_mut_cell(row, col) = CellValue::Integer(number);
         
         // As no parents and formula remove the meta data from the set and map
         // to avoid memory leaks
         sheet.cell_meta.remove(&cell_key);
-        // let meta = sheet.get_cell_meta(row, col);
-        // meta.formula = -1;
-        // meta.parent1 = -1;
-        // meta.parent2 = -1;
         return CommandStatus::CmdOk;
     }
     
@@ -122,9 +113,11 @@ pub fn evaluate_arithmetic(
                 
                 // Get reference cell key and value
                 let ref_cell_key = sheet.get_key(target_row, target_col);
-                let ref_cell_value = sheet.get_cell(target_row, target_col).value.clone();
-                let error_state = matches!(ref_cell_value, CellValue::Error);
-                
+                let ref_cell_value = match sheet.get_cell(target_row, target_col) {
+                    CellValue::Integer(val) => CellValue::Integer(*val),
+                    _ => CellValue::Error,
+                };
+
                 // Save old state
                 let old_meta = sheet.cell_meta.get(&cell_key).cloned();
                 
@@ -154,13 +147,7 @@ pub fn evaluate_arithmetic(
                 add_children(sheet, ref_cell_key, -1, 82, row, col);
                 
                 // Update cell value
-                let cell = sheet.get_mut_cell(row, col);
-                if error_state {
-                    cell.value = CellValue::Error;
-                } else {
-                    cell.value = ref_cell_value;
-                }
-                
+                *sheet.get_mut_cell(row, col) = ref_cell_value ;
                 return CommandStatus::CmdOk;
             },
             Err(status) => return status
@@ -190,8 +177,8 @@ pub fn evaluate_arithmetic(
     }
     
     // Split into left and right parts
-    let left = &expr[..op_idx].trim();
-    let right = &expr[op_idx+1..].trim();
+    let left = &expr[..op_idx];
+    let right = &expr[op_idx+1..];
     
     if left.is_empty() || right.is_empty() {
         return CommandStatus::CmdUnrecognized;
@@ -219,8 +206,8 @@ pub fn evaluate_arithmetic(
                 
                 // Get reference cell value
                 let left_cell = sheet.get_cell(left_row, left_col);
-                match left_cell.value {
-                    CellValue::Integer(val) => left_val = val,
+                match left_cell {
+                    CellValue::Integer(val) => left_val = *val,
                     _ => {
                         error_found = true;
                     }
@@ -243,8 +230,8 @@ pub fn evaluate_arithmetic(
                 
                 // Get reference cell value
                 let right_cell = sheet.get_cell(right_row, right_col);
-                match right_cell.value {
-                    CellValue::Integer(val) => right_val = val,
+                match right_cell {
+                    CellValue::Integer(val) => right_val = *val,
                     _ => {
                         error_found = true;
                     }
@@ -302,8 +289,9 @@ pub fn evaluate_arithmetic(
     if has_cycle {
         // Restore old state
         if let Some(old) = old_meta {
-            sheet.cell_meta.insert(cell_key, old.clone());
-            add_children(sheet, old.parent1, old.parent2, old.formula, row, col);
+            let (parent1, parent2, formula) = (old.parent1, old.parent2, old.formula);
+            sheet.cell_meta.insert(cell_key, old);
+            add_children(sheet, parent1, parent2, formula, row, col);
         } else {
             sheet.cell_meta.remove(&cell_key);
         }
@@ -317,27 +305,29 @@ pub fn evaluate_arithmetic(
         add_children(sheet, left_cell_key, right_cell_key, formula_type, row, col);
     }
     else if left_is_cell {
+        // Ordering of Cells matters
         add_children(sheet, left_cell_key, -1, formula_type, row, col);
     }
     else if right_is_cell {
-        add_children(sheet, right_cell_key, -1, formula_type, row, col);
+        // Ordering of Cells matters
+        add_children(sheet, -1, right_cell_key, formula_type, row, col);
     }
     
     // Calculate result
     let cell = sheet.get_mut_cell(row, col);
     
     if error_found {
-        cell.value = CellValue::Error;
+        *cell = CellValue::Error;
     } else {
         match op {
-            b'+' => cell.value = CellValue::Integer(left_val + right_val),
-            b'-' => cell.value = CellValue::Integer(left_val - right_val),
-            b'*' => cell.value = CellValue::Integer(left_val * right_val),
+            b'+' => *cell = CellValue::Integer(left_val + right_val),
+            b'-' => *cell = CellValue::Integer(left_val - right_val),
+            b'*' => *cell = CellValue::Integer(left_val * right_val),
             b'/' => {
                 if right_val == 0 {
-                    cell.value = CellValue::Error;
+                    *cell = CellValue::Error;
                 } else {
-                    cell.value = CellValue::Integer(left_val / right_val);
+                    *cell = CellValue::Integer(left_val / right_val);
                 }
             },
             _ => unreachable!()
@@ -382,7 +372,7 @@ pub fn evaluate_formula(
                         bytes[3] == b'E' && 
                         bytes[4] == b'V' && 
                         bytes.get(5) == Some(&b'(') => (true, 9, 6),
-        _ => (false, 0, 0),
+        _ => (false, -1, 0),
     };
 
     if is_formula {
@@ -416,7 +406,7 @@ pub fn evaluate_formula(
             meta.formula = formula_type;
         }
 
-        // Check for circular reference
+        // // Check for circular reference
         if detect_cycle(sheet, parent1, parent2, formula_type, cell_key) {
             // If a cycle is detected, restore the old parents and formula
             if let Some(old) = old_meta {
@@ -432,7 +422,7 @@ pub fn evaluate_formula(
             return CommandStatus::CmdCircularRef;
         }
 
-        // Add children and evaluate the appropriate function
+        // // Add children and evaluate the appropriate function
         add_children(sheet, parent1, parent2, formula_type, row, col);
         
         match formula_type {
@@ -449,11 +439,11 @@ pub fn evaluate_formula(
                 let count = ((range.end_row - range.start_row + 1) as i32) * 
                            ((range.end_col - range.start_col + 1) as i32);
                            
-                let cell: &mut crate::cell::Cell = sheet.get_mut_cell(row, col);
-                if let CellValue::Integer(sum) = cell.value {
-                    cell.value = CellValue::Integer(sum / count);
+                let cell: &mut crate::cell::CellValue = sheet.get_mut_cell(row, col);
+                if let CellValue::Integer(sum) = *cell {
+                    *cell = CellValue::Integer(sum / count);
                 } else {
-                    cell.value = CellValue::Error;
+                    *cell = CellValue::Error;
                 }
                 CommandStatus::CmdOk
             },
@@ -536,41 +526,3 @@ pub fn handle_command(
     // No recognized command
     CommandStatus::CmdUnrecognized
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn test_handle_command() {
-//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-//         let mut sleep_time = 0.0;
-//         assert_eq!(handle_command(&mut sheet, "A1=42".to_string(), &mut sleep_time), CommandStatus::CmdOk);
-//         assert_eq!(sheet.get_cell(0, 0).value, CellValue::Integer(42));
-//         assert_eq!(handle_command(&mut sheet, "disable_output".to_string(), &mut sleep_time), CommandStatus::CmdOk);
-//         assert_eq!(handle_command(&mut sheet, "w".to_string(), &mut sleep_time), CommandStatus::CmdOk);
-//         assert_eq!(handle_command(&mut sheet, "scroll_to B2".to_string(), &mut sleep_time), CommandStatus::CmdOk);
-//     }
-
-//     #[test]
-//     fn test_evaluate_arithmetic() {
-//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-//         assert_eq!(evaluate_arithmetic(&mut sheet, 0, 0, "42"), CommandStatus::CmdOk);
-//         assert_eq!(sheet.get_cell(0, 0).value, CellValue::Integer(42));
-//         assert_eq!(evaluate_arithmetic(&mut sheet, 0, 1, "A1"), CommandStatus::CmdOk);
-//         assert_eq!(sheet.get_cell(0, 1).value, CellValue::Integer(42));
-//         assert_eq!(evaluate_arithmetic(&mut sheet, 1, 0, "A1 + B1"), CommandStatus::CmdOk);
-//         assert_eq!(sheet.get_cell(1, 0).value, CellValue::Integer(84));
-//         assert_eq!(evaluate_arithmetic(&mut sheet, 1, 1, "A1 / B2"), CommandStatus::CmdOk); // B2 is 0
-//         assert_eq!(sheet.get_cell(1, 1).value, CellValue::Error);
-//     }
-
-//     #[test]
-//     fn test_handle_sleep() {
-//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-//         let mut sleep_time = 0.0;
-//         assert_eq!(handle_sleep(&mut sheet, 0, 0, "2", &mut sleep_time), CommandStatus::CmdOk);
-//         assert_eq!(sleep_time, 2.0);
-//         assert_eq!(handle_sleep(&mut sheet, 0, 1, "A1", &mut sleep_time), CommandStatus::CmdOk);
-//     }
-// }
