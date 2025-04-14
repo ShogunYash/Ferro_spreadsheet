@@ -1,12 +1,11 @@
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
-// Spreadsheet implementation
 use crate::cell::{CellValue, parse_cell_reference}; 
 
 // Constants
-const MAX_ROWS: i16 = 999;    // Example value, adjust as needed
-const MAX_COLS: i16 = 18278;  // Example value, adjust as needed
+const MAX_ROWS: i16 = 999;    // Maximum number of rows in the spreadsheet   
+const MAX_COLS: i16 = 18278;  // Maximum number of columns in the spreadsheet
 
 #[derive(Debug, PartialEq)]
 pub enum CommandStatus {
@@ -64,7 +63,7 @@ impl Spreadsheet {
                 
         Some(Spreadsheet {
             grid,
-            cell_meta: HashMap::with_capacity(32),
+            cell_meta: HashMap::with_capacity(1024),
             children,
             rows,
             cols,
@@ -84,11 +83,6 @@ impl Spreadsheet {
         let row = (key / (self.cols as i32)) as i16;
         let col = (key % (self.cols as i32)) as i16;
         (row, col)
-    }
-    
-    // Helper to get index from key
-    fn key_to_index(&self, key: i32) -> usize {
-        key as usize
     }
 
     // Helper to get index from row and column
@@ -157,25 +151,19 @@ impl Spreadsheet {
     
     // Add a child to a cell's dependents (modified for Vec of HashSets)
     pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
-        let parent_index = self.key_to_index(*parent_key);
+        let parent_index = *parent_key as usize;
         self.children[parent_index].insert(*child_key);
     }
     
     // Remove a child from a cell's dependents (modified for Vec of HashSets)
     pub fn remove_child(&mut self, parent_key: i32, child_key: i32) {
-        let parent_index = self.key_to_index(parent_key);
+        let parent_index = parent_key as usize;
         self.children[parent_index].remove(&child_key);
     }
-
-    // Get children HashSet for a cell
-    // pub fn get_children(&mut self, key: i32) -> &mut HashSet<i32> {
-    //     let index = self.key_to_index(key);
-    //     &mut self.children[index]
-    // }
       
     // Get children for a cell (immutable)
     pub fn get_cell_children(&self, key: i32) -> Option<&HashSet<i32>> {
-        let index = self.key_to_index(key);
+        let index = key as usize;
         let children = &self.children[index];
         if children.is_empty() {
             None
