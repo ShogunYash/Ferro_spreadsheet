@@ -1,98 +1,111 @@
-# Makefile for Ferro_spreadsheet
+.PHONY: all clean run
 
-# Detect the environment
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Linux)
-  # Running in WSL or Linux
-  CARGO = $(shell command -v cargo 2>/dev/null || echo "cargo")
-  # If cargo is not found, try using Windows cargo via cmd.exe
-  ifeq ($(CARGO),cargo)
-    CARGO_PATH = $(shell cmd.exe /c "where cargo" 2>/dev/null | head -1 | tr -d '\r')
-    ifneq ($(CARGO_PATH),)
-      CARGO_DIR = $(dir $(CARGO_PATH))
-      CARGO = cmd.exe /c $(CARGO_PATH)
-    endif
-  endif
-else
-  # Windows environment
-  CARGO = cargo
-endif
+all: clean target/release/spreadsheet
 
-# Build configuration
-RELEASE_FLAGS = --release
-# Fix: Set RUSTFLAGS as an environment variable when calling cargo
-# RUSTFLAGS_OPTIMIZED = -C target-cpu=native -C opt-level=3 -C codegen-units=1 -C lto=fat
-# Modify the RUSTFLAGS_OPTIMIZED line
-# RUSTFLAGS_OPTIMIZED = -C target-cpu=native -C opt-level=3 -C codegen-units=1 -C lto=thin
-RUSTFLAGS_OPTIMIZED = -C target-cpu=native -C opt-level=3
+target/release/spreadsheet:
+	cargo build --release
+	
+clean:
+	cargo clean
 
-# Build targets with different optimization levels
-.PHONY: all clean build run check-cargo optimized bench test package
+run: target/release/spreadsheet
+	./target/release/spreadsheet 999 18278
 
-# Default target
-all: check-cargo build
+# # Makefile for Ferro_spreadsheet
 
-# Check if cargo is available
-check-cargo:
-	@if [ "$(CARGO)" = "cargo" ] && ! command -v cargo >/dev/null; then \
-		echo "Error: Cargo is not installed or not in PATH"; \
-		echo "Please install Rust/Cargo from https://rustup.rs/"; \
-		exit 1; \
-	fi
+# # Detect the environment
+# UNAME_S := $(shell uname -s)
+# ifeq ($(UNAME_S),Linux)
+#   # Running in WSL or Linux
+#   CARGO = $(shell command -v cargo 2>/dev/null || echo "cargo")
+#   # If cargo is not found, try using Windows cargo via cmd.exe
+#   ifeq ($(CARGO),cargo)
+#     CARGO_PATH = $(shell cmd.exe /c "where cargo" 2>/dev/null | head -1 | tr -d '\r')
+#     ifneq ($(CARGO_PATH),)
+#       CARGO_DIR = $(dir $(CARGO_PATH))
+#       CARGO = cmd.exe /c $(CARGO_PATH)
+#     endif
+#   endif
+# else
+#   # Windows environment
+#   CARGO = cargo
+# endif
 
-# Build the project
-build: check-cargo
-	@echo "Building Ferro spreadsheet..."
-	$(CARGO) build --release
+# # Build configuration
+# RELEASE_FLAGS = --release
+# # Fix: Set RUSTFLAGS as an environment variable when calling cargo
+# # RUSTFLAGS_OPTIMIZED = -C target-cpu=native -C opt-level=3 -C codegen-units=1 -C lto=fat
+# # Modify the RUSTFLAGS_OPTIMIZED line
+# # RUSTFLAGS_OPTIMIZED = -C target-cpu=native -C opt-level=3 -C codegen-units=1 -C lto=thin
+# RUSTFLAGS_OPTIMIZED = -C target-cpu=native -C opt-level=3
 
-# Build with high optimization settings
-optimized: check-cargo
-	@echo "Building highly optimized Ferro spreadsheet..."
-	RUSTFLAGS="$(RUSTFLAGS_OPTIMIZED)" $(CARGO) build $(RELEASE_FLAGS)
+# # Build targets with different optimization levels
+# .PHONY: all clean build run check-cargo optimized bench test package
 
-# Run the project with provided arguments
-run: check-cargo
-	@echo "Running Ferro spreadsheet..."
-	$(CARGO) run --release -- $(filter-out $@,$(MAKECMDGOALS))
+# # Default target
+# all: check-cargo build
 
-# Run with high optimization
-run-optimized: optimized
-	@echo "Running optimized Ferro spreadsheet..."
-	RUSTFLAGS="$(RUSTFLAGS_OPTIMIZED)" $(CARGO) run $(RELEASE_FLAGS) -- $(filter-out $@,$(MAKECMDGOALS))
+# # Check if cargo is available
+# check-cargo:
+# 	@if [ "$(CARGO)" = "cargo" ] && ! command -v cargo >/dev/null; then \
+# 		echo "Error: Cargo is not installed or not in PATH"; \
+# 		echo "Please install Rust/Cargo from https://rustup.rs/"; \
+# 		exit 1; \
+# 	fi
 
-# Benchmark the application
-bench: check-cargo
-	@echo "Running benchmarks..."
-	$(CARGO) bench
+# # Build the project
+# build: check-cargo
+# 	@echo "Building Ferro spreadsheet..."
+# 	$(CARGO) build --release
 
-# Run tests
-test: check-cargo
-	@echo "Running tests..."
-	$(CARGO) test
+# # Build with high optimization settings
+# optimized: check-cargo
+# 	@echo "Building highly optimized Ferro spreadsheet..."
+# 	RUSTFLAGS="$(RUSTFLAGS_OPTIMIZED)" $(CARGO) build $(RELEASE_FLAGS)
 
-# Clean the project
-clean: check-cargo
-	@echo "Cleaning up..."
-	$(CARGO) clean
+# # Run the project with provided arguments
+# run: check-cargo
+# 	@echo "Running Ferro spreadsheet..."
+# 	$(CARGO) run --release -- $(filter-out $@,$(MAKECMDGOALS))
 
-# Install the project (UNIX-like systems)
-install: build
-	@echo "Installing Ferro spreadsheet..."
-	cp target/release/sheet /usr/local/bin/
+# # Run with high optimization
+# run-optimized: optimized
+# 	@echo "Running optimized Ferro spreadsheet..."
+# 	RUSTFLAGS="$(RUSTFLAGS_OPTIMIZED)" $(CARGO) run $(RELEASE_FLAGS) -- $(filter-out $@,$(MAKECMDGOALS))
 
-# Install the project (Windows)
-install-win: build
-	@echo "Installing Ferro spreadsheet..."
-	copy /Y target\release\sheet.exe %USERPROFILE%\bin\
+# # Benchmark the application
+# bench: check-cargo
+# 	@echo "Running benchmarks..."
+# 	$(CARGO) bench
 
-# Create release package
-package: optimized
-	@echo "Creating release package..."
-	@mkdir -p release-package
-	cp target/release/sheet release-package/
-	cp README.md release-package/ 2>/dev/null || echo "No README found"
-	@echo "Package created in release-package directory"
+# # Run tests
+# test: check-cargo
+# 	@echo "Running tests..."
+# 	$(CARGO) test
 
-# Allow passing arguments to the run target
-%:
-	@:
+# # Clean the project
+# clean: check-cargo
+# 	@echo "Cleaning up..."
+# 	$(CARGO) clean
+
+# # Install the project (UNIX-like systems)
+# install: build
+# 	@echo "Installing Ferro spreadsheet..."
+# 	cp target/release/sheet /usr/local/bin/
+
+# # Install the project (Windows)
+# install-win: build
+# 	@echo "Installing Ferro spreadsheet..."
+# 	copy /Y target\release\sheet.exe %USERPROFILE%\bin\
+
+# # Create release package
+# package: optimized
+# 	@echo "Creating release package..."
+# 	@mkdir -p release-package
+# 	cp target/release/sheet release-package/
+# 	cp README.md release-package/ 2>/dev/null || echo "No README found"
+# 	@echo "Package created in release-package directory"
+
+# # Allow passing arguments to the run target
+# %:
+# 	@:
