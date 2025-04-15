@@ -74,7 +74,6 @@ pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
     }
 }
 
-
 pub fn detect_cycle(sheet: &Spreadsheet, parent1: i32, parent2: i32, formula: i16, target_key: i32) -> bool {
     let rem = formula % 10;
     

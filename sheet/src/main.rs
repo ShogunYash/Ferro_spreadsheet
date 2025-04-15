@@ -3,6 +3,7 @@ mod spreadsheet;
 mod evaluator;
 mod formula;
 mod graph;
+mod reevaluate_topo;
 use std::env;
 use std::io::{self, Write};
 use std::process;

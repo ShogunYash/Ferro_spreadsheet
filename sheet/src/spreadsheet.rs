@@ -144,6 +144,10 @@ impl Spreadsheet {
         &self.grid[index]
     }
     
+    pub fn get_key_cell(&self, cell_key: i32) -> &CellValue {
+        &self.grid[cell_key as usize]
+    }
+
     pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut CellValue {
         let index = self.get_index(row, col);
         &mut self.grid[index]

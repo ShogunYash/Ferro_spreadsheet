@@ -1,8 +1,9 @@
 use crate::spreadsheet::{Spreadsheet, CommandStatus};
 use crate::cell::{CellValue, parse_cell_reference};
 use crate::formula::parse_range;
-use crate::formula::{eval_max, eval_min, sum_value, eval_variance};
+use crate::formula::{eval_max, eval_min, sum_value, eval_variance, eval_avg};
 use crate::graph::{add_children, remove_all_parents, detect_cycle};
+use crate::reevaluate_topo::{toposort_reval_detect_cycle, sleep_fn};
 
 pub fn handle_sleep(
     sheet: &mut Spreadsheet,
@@ -53,8 +54,8 @@ pub fn handle_sleep(
         // Get the value from parent cell
         let parent_value = sheet.get_cell(target_row, target_col);
         if let CellValue::Integer(val) = parent_value {
-            *sleep_time += *val as f64;
-            *sheet.get_mut_cell(row, col) = CellValue::Integer(*val);
+            // Update cell value and sleep time
+            sleep_fn(sheet, row, col, *val, sleep_time);
         }
         else{
             *sheet.get_mut_cell(row, col) = CellValue::Error;
@@ -64,12 +65,10 @@ pub fn handle_sleep(
     else if let Ok(val) = expr.parse::<i32>() {
         // Remove all parents and update cell in one sequence
         remove_all_parents(sheet, row, col);
-        // Update cell value
-        *sheet.get_mut_cell(row, col) = CellValue::Integer(val);
+        // Update cell value and sleep_time
+        sleep_fn(sheet, row, col, val, sleep_time);
         // Delete the cell meta entry
         sheet.cell_meta.remove(&cell_key);
-        // Update sleep time
-        *sleep_time += val as f64;
     }
     else {
         return CommandStatus::CmdUnrecognized;
@@ -426,28 +425,11 @@ pub fn evaluate_formula(
         add_children(sheet, parent1, parent2, formula_type, row, col);
         
         match formula_type {
-            9 => eval_variance(sheet, row, col, &range),
-            8 => eval_max(sheet, row, col, &range),
-            7 => eval_min(sheet, row, col, &range),
-            6 => {
-                // AVG case
-                let status = sum_value(sheet, row, col, &range);
-                if status != CommandStatus::CmdOk {
-                    return status;
-                }
-                
-                let count = ((range.end_row - range.start_row + 1) as i32) * 
-                           ((range.end_col - range.start_col + 1) as i32);
-                           
-                let cell: &mut crate::cell::CellValue = sheet.get_mut_cell(row, col);
-                if let CellValue::Integer(sum) = *cell {
-                    *cell = CellValue::Integer(sum / count);
-                } else {
-                    *cell = CellValue::Error;
-                }
-                CommandStatus::CmdOk
-            },
-            _ => sum_value(sheet, row, col, &range), // SUM case
+            9 => eval_variance(sheet, row, col, parent1, parent2),
+            8 => eval_max(sheet, row, col, parent1, parent2),
+            7 => eval_min(sheet, row, col, parent1, parent2),
+            6 => eval_avg(sheet, row, col, parent1, parent2),
+            _ => sum_value(sheet, row, col, parent1, parent2), // SUM case
         }
     } else {
         // Handle arithmetic expressions
@@ -457,6 +439,14 @@ pub fn evaluate_formula(
 
 pub fn set_cell_value(sheet: &mut Spreadsheet, row: i16, col: i16, expr: &str, sleep_time: &mut f64) -> CommandStatus {
     let status: CommandStatus = evaluate_formula(sheet, row, col, expr, sleep_time);
+    if let CommandStatus::CmdOk = status {
+        // Reevaluate the cell dependents graphs i.e. all of its children
+        // Also at same time check for cycle in the graph as it will save time and memory
+        let has_cycle = toposort_reval_detect_cycle(sheet, row, col, sleep_time);
+        if has_cycle {
+            return CommandStatus::CmdCircularRef;
+        }
+    }
     status
 }
 
