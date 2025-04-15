@@ -21,7 +21,10 @@ endif
 # Build configuration
 RELEASE_FLAGS = --release
 # Fix: Set RUSTFLAGS as an environment variable when calling cargo
-RUSTFLAGS_OPTIMIZED = -C target-cpu=native -C opt-level=3 -C codegen-units=1 -C lto=fat
+# RUSTFLAGS_OPTIMIZED = -C target-cpu=native -C opt-level=3 -C codegen-units=1 -C lto=fat
+# Modify the RUSTFLAGS_OPTIMIZED line
+# RUSTFLAGS_OPTIMIZED = -C target-cpu=native -C opt-level=3 -C codegen-units=1 -C lto=thin
+RUSTFLAGS_OPTIMIZED = -C target-cpu=native -C opt-level=3
 
 # Build targets with different optimization levels
 .PHONY: all clean build run check-cargo optimized bench test package

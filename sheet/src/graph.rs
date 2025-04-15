@@ -60,7 +60,6 @@ pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
             }
         }
     }
-
     else if rem == 0 {
         let parent1= meta.parent1;
         let parent2 = meta.parent2;
@@ -74,6 +73,7 @@ pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
         sheet.remove_child(meta.parent2, child_key);
     }
 }
+
 
 pub fn detect_cycle(sheet: &Spreadsheet, parent1: i32, parent2: i32, formula: i16, target_key: i32) -> bool {
     let rem = formula % 10;
@@ -145,28 +145,75 @@ pub fn detect_cycle(sheet: &Spreadsheet, parent1: i32, parent2: i32, formula: i1
 // #[cfg(test)]
 // mod tests {
 //     use super::*;
-
+//     use crate::cell::CellValue;
+    
 //     #[test]
-//     fn test_add_remove_child() {
-//         let mut cell = Cell::new();
-//         add_child(&mut cell, 0, 1, 5);
-//         assert!(cell.children.is_some());
-//         remove_child(&mut cell, get_key(0, 1, 5));
-//         assert!(cell.children.is_none());
+//     fn test_remove_all_parents() {
+//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        
+//         // Set up parent-child relationships
+//         let meta = sheet.get_cell_meta(0, 0);
+//         meta.parent1 = sheet.get_key(1, 1);
+//         meta.parent2 = sheet.get_key(2, 2);
+        
+//         add_children(&mut sheet, meta.parent1, meta.parent2, 5, 0, 0);
+        
+//         // Verify children are set up correctly
+//         assert!(sheet.get_cell_children(meta.parent1).unwrap().contains(&sheet.get_key(0, 0)));
+//         assert!(sheet.get_cell_children(meta.parent2).unwrap().contains(&sheet.get_key(0, 0)));
+        
+//         // Remove all parents
+//         remove_all_parents(&mut sheet, 0, 0);
+        
+//         // Verify children are removed
+//         assert!(sheet.get_cell_children(meta.parent1).is_none() || 
+//                !sheet.get_cell_children(meta.parent1).unwrap().contains(&sheet.get_key(0, 0)));
+        
+//         assert!(sheet.get_cell_children(meta.parent2).is_none() || 
+//                !sheet.get_cell_children(meta.parent2).unwrap().contains(&sheet.get_key(0, 0)));
 //     }
-
+    
 //     #[test]
 //     fn test_add_children() {
 //         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-//         add_children(&mut sheet, get_key(0, 0, 5), get_key(1, 1, 5), 5, 2, 2); // Range formula
-//         assert!(sheet.get_cell(0, 0).children.is_some());
+        
+//         // Add a child with single parent
+//         add_children(&mut sheet, sheet.get_key(1, 1), -1, 82, 0, 0);
+//         assert!(sheet.get_cell_children(sheet.get_key(1, 1)).unwrap().contains(&sheet.get_key(0, 0)));
+        
+//         // Add a child with range parents (SUM formula)
+//         add_children(&mut sheet, sheet.get_key(2, 2), sheet.get_key(3, 3), 5, 0, 1);
+        
+//         // Verify all cells in the range have the child
+//         for r in 2..=3 {
+//             for c in 2..=3 {
+//                 assert!(sheet.get_cell_children(sheet.get_key(r, c)).unwrap().contains(&sheet.get_key(0, 1)));
+//             }
+//         }
 //     }
-
+    
 //     #[test]
 //     fn test_detect_cycle() {
 //         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-//         sheet.get_mut_cell(0, 0).parent1 = get_key(0, 1, 5);
-//         sheet.get_mut_cell(0, 1).parent1 = get_key(0, 0, 5);
-//         assert!(detect_cycle(&sheet, get_key(0, 1, 5), -1, 82, get_key(0, 0, 5)));
+        
+//         // Set up a dependency chain: A1 -> B1 -> C1
+//         *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);  // A1 = 1
+//         *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);  // B1 = 2
+        
+//         let a1_key = sheet.get_key(0, 0);
+//         let b1_key = sheet.get_key(0, 1);
+//         let c1_key = sheet.get_key(0, 2);
+        
+//         // B1 depends on A1
+//         add_children(&mut sheet, a1_key, -1, 82, 0, 1);
+        
+//         // C1 depends on B1
+//         add_children(&mut sheet, b1_key, -1, 82, 0, 2);
+        
+//         // No cycle yet
+//         assert!(!detect_cycle(&sheet, a1_key, -1, 82, c1_key));
+        
+//         // This would create a cycle: A1 depends on C1
+//         assert!(detect_cycle(&sheet, c1_key, -1, 82, a1_key));
 //     }
 // }

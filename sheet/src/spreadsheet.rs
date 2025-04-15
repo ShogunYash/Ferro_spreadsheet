@@ -1,12 +1,11 @@
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
-// Spreadsheet implementation
 use crate::cell::{CellValue, parse_cell_reference}; 
 
 // Constants
-const MAX_ROWS: i16 = 999;    // Example value, adjust as needed
-const MAX_COLS: i16 = 18278;  // Example value, adjust as needed
+const MAX_ROWS: i16 = 999;    // Maximum number of rows in the spreadsheet   
+const MAX_COLS: i16 = 18278;  // Maximum number of columns in the spreadsheet
 
 #[derive(Debug, PartialEq)]
 pub enum CommandStatus {
@@ -34,12 +33,12 @@ impl CellMeta {
     }
 }
 
-// Spreadsheet structure with separate cell_meta and cell_children maps
+// Spreadsheet structure with separate cell_meta and Vec of HashSets for children
 // Changed grid to Vec<CellValue> from Vec<Cell>
 pub struct Spreadsheet {
     pub grid: Vec<CellValue>,                      // Vector of CellValues (contiguous in memory)
+    pub children: Vec<HashSet<i32>>,               // Vector of HashSets for children (one per cell)
     pub cell_meta: HashMap<i32, CellMeta>,         // Map from cell key to metadata
-    pub cell_children: HashMap<i32, HashSet<i32>>, // Map from cell key to its children
     pub rows: i16,
     pub cols: i16,
     viewport_row: i16,
@@ -55,14 +54,17 @@ impl Spreadsheet {
             return None;
         }
         
-        // Create empty cells - initialize with Integer(0) instead of Cell::new()
+        // Create empty cells - initialize with Integer(0)
         let total = rows as usize * cols as usize;
         let grid = vec![CellValue::Integer(0); total];
+        
+        // Create empty HashSet for each cell
+        let children = vec![HashSet::with_capacity(4); total];
                 
         Some(Spreadsheet {
             grid,
-            cell_meta: HashMap::with_capacity(32),
-            cell_children: HashMap::with_capacity(32),
+            children,
+            cell_meta: HashMap::with_capacity(1024),
             rows,
             cols,
             viewport_row: 0,
@@ -82,6 +84,11 @@ impl Spreadsheet {
         let col = (key % (self.cols as i32)) as i16;
         (row, col)
     }
+
+    // Helper to get index from row and column
+    fn get_index(&self, row: i16, col: i16) -> usize {
+        (row as usize) * (self.cols as usize) + (col as usize)
+    }
     
     // Get cell metadata, creating it if it doesn't exist
     pub fn get_cell_meta(&mut self, row: i16, col: i16) -> &mut CellMeta {
@@ -89,16 +96,6 @@ impl Spreadsheet {
         self.cell_meta.entry(key).or_insert_with(CellMeta::new)
     }
     
-    // Get children HashSet for a cell, creating it if it doesn't exist
-    pub fn get_children(&mut self, key: i32) -> &mut HashSet<i32> {
-        self.cell_children.entry(key).or_insert_with(|| HashSet::with_capacity(2))
-    }
-      
-    // Get children for a cell (immutable)
-    pub fn get_cell_children(&self, key: i32) -> Option<&HashSet<i32>> {
-        self.cell_children.get(&key)
-    }
-
     pub fn get_column_name(&self, mut col: i16) -> String {
         // Pre-calculate the length needed for the string
         let mut temp_col = col + 1; // Convert from 0-based to 1-based
@@ -143,30 +140,35 @@ impl Spreadsheet {
     }
 
     pub fn get_cell(&self, row: i16, col: i16) -> &CellValue {
-        let index = (row as usize) * (self.cols as usize) + (col as usize);    
+        let index = self.get_index(row, col);
         &self.grid[index]
     }
     
     pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut CellValue {
-        let index = (row as usize) * (self.cols as usize) + (col as usize);
+        let index = self.get_index(row, col);
         &mut self.grid[index]
     }
     
-    // Add a child to a cell's dependents (modified for separate children HashMap)
-    pub fn add_child(&mut self, parent_key: &i32, child_key: &i32){    
-        let children = self.get_children(*parent_key);
-        children.insert(*child_key);
+    // Add a child to a cell's dependents (modified for Vec of HashSets)
+    pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
+        let parent_index = *parent_key as usize;
+        self.children[parent_index].insert(*child_key);
     }
     
-    // Remove a child from a cell's dependents (modified for separate children HashMap)
+    // Remove a child from a cell's dependents (modified for Vec of HashSets)
     pub fn remove_child(&mut self, parent_key: i32, child_key: i32) {
-        if let Some(children) = self.cell_children.get_mut(&parent_key) {
-            children.remove(&child_key);
-    
-            // If no children left, remove the entry to save memory
-            if children.is_empty() {
-                self.cell_children.remove(&parent_key);
-            }
+        let parent_index = parent_key as usize;
+        self.children[parent_index].remove(&child_key);
+    }
+      
+    // Get children for a cell (immutable)
+    pub fn get_cell_children(&self, key: i32) -> Option<&HashSet<i32>> {
+        let index = key as usize;
+        let children = &self.children[index];
+        if children.is_empty() {
+            None
+        } else {
+            Some(children)
         }
     }
 
