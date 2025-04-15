@@ -1,13 +1,9 @@
 [package]
-name = "ferro_spreadsheet"
+name = "spreadsheet"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["Your Name <your.email@example.com>"]
 description = "A simple spreadsheet implementation in Rust"
-
-[[bin]]
-name = "sheet"
-path = "sheet/src/main.rs"
 
 # Release profile optimization settings
 [profile.release]
