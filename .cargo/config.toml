@@ -2,7 +2,7 @@
 # Add Rust compiler flags
 rustflags = [
     "-C", "target-cpu=native",
-    "-C", "inline-threshold=275",
+    "-C", "llvm-args=--inline-threshold=275",
 ]
 
 # Uncomment for profile-guided optimization (requires multiple steps)
