@@ -85,7 +85,7 @@ impl Spreadsheet {
         Some(Spreadsheet {
             grid,
             children: HashMap::new(),
-            range_children: Vec::with_capacity(64),
+            range_children: Vec::with_capacity(32), // Preallocate with initial size
             cell_meta: HashMap::new(),
             rows,
             cols,

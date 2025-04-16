@@ -128,7 +128,7 @@ pub fn toposort_reval_detect_cycle(sheet: &mut Spreadsheet, row: i16, col: i16, 
         // Direct children from standard dependencies
         if let Some(children) = sheet.get_cell_children(cell_key) {
             for child in children {
-                if !fully_visited.contains(&child) {
+                if !fully_visited.contains(child) {
                     stack.push((*child, false));
                 }
             }
