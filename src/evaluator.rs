@@ -5,6 +5,7 @@ use crate::formula::{eval_max, eval_min, sum_value, eval_variance, eval_avg};
 use crate::graph::{add_children, remove_all_parents};
 use crate::reevaluate_topo::{toposort_reval_detect_cycle, sleep_fn};
 
+
 pub fn handle_sleep(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -491,6 +492,19 @@ pub fn handle_command(
             return CommandStatus::CmdOk;
         },
         _ => {}
+    }
+    
+    // Check for cell dependency visualization command
+    if trimmed.starts_with("visualize ") {
+        let cell_ref = &trimmed[10..]; // Skip "visualize " prefix
+        match parse_cell_reference(sheet, cell_ref) {
+            Ok((row, col)) => {
+                return sheet.visualize_cell_relationships(row, col);
+            },
+            Err(status) => {
+                return status;
+            }
+        }
     }
     
     // Check for scroll_to command with byte-based comparison
