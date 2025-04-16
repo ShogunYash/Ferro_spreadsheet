@@ -7,6 +7,14 @@ use crate::cell::{CellValue, parse_cell_reference};
 const MAX_ROWS: i16 = 999;    // Maximum number of rows in the spreadsheet   
 const MAX_COLS: i16 = 18278;  // Maximum number of columns in the spreadsheet
 
+// Structure to represent a range-based child relationship
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RangeChild {
+    pub start_key: i32,       // Range start cell key
+    pub end_key: i32,         // Range end cell key
+    pub child_key: i32,       // Child cell key
+}
+
 #[derive(Debug, PartialEq)]
 pub enum CommandStatus {
     CmdOk,
@@ -33,12 +41,12 @@ impl CellMeta {
     }
 }
 
-// Spreadsheet structure with separate cell_meta and Vec of boxed HashSets for children
-// Changed grid to Vec<CellValue> from Vec<Cell>
+// Spreadsheet structure with HashMap of boxed HashSets for children
 pub struct Spreadsheet {
-    pub grid: Vec<CellValue>,                      // Vector of CellValues (contiguous in memory)
-    pub children: Vec<Box<HashSet<i32>>>,          // Vector of pointers to HashSets for children
-    pub cell_meta: HashMap<i32, CellMeta>,         // Map from cell key to metadata
+    pub grid: Vec<CellValue>,                                // Vector of CellValues (contiguous in memory)
+    pub children: HashMap<i32, Box<HashSet<i32>>>,           // Map from cell key to boxed HashSet of children
+    pub range_children: Vec<RangeChild>,                     // Vector of range-based child relationships
+    pub cell_meta: HashMap<i32, CellMeta>,                   // Map from cell key to metadata
     pub rows: i16,
     pub cols: i16,
     viewport_row: i16,
@@ -58,16 +66,13 @@ impl Spreadsheet {
         let total = rows as usize * cols as usize;
         let grid = vec![CellValue::Integer(0); total];
         
-        // Create empty boxed HashSets for each cell
-        let mut children = Vec::with_capacity(total);
-        for _ in 0..total {
-            children.push(Box::new(HashSet::new()));
-        }
+        // Create an empty HashMap for children - HashSets will be created only when needed
+        // let children = HashMap::with_capacity(total / 10);  // Preallocate with estimated size
                 
         Some(Spreadsheet {
             grid,
-            children,
-            // cell_meta: HashMap::with_capacity(2048),
+            children: HashMap::new(),
+            range_children: Vec::with_capacity(64),
             cell_meta: HashMap::new(),
             rows,
             cols,
@@ -157,27 +162,64 @@ impl Spreadsheet {
         &mut self.grid[index]
     }
     
-    // Add a child to a cell's dependents (modified for Vec of boxed HashSets)
-    pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
-        let parent_index = *parent_key as usize;
-        self.children[parent_index].insert(*child_key);
+    // Add a range-based child relationship
+    pub fn add_range_child(&mut self, start_key: i32, end_key: i32, child_key: i32) {
+        self.range_children.push(RangeChild {
+            start_key,
+            end_key,
+            child_key,
+        });
     }
     
-    // Remove a child from a cell's dependents (modified for Vec of boxed HashSets)
+    // Remove range-based child relationships for a given child
+    pub fn remove_range_child(&mut self, child_key: i32) {
+        self.range_children.retain(|rc| rc.child_key != child_key);
+    }
+    
+    // Check if a cell is within a range
+    pub fn is_cell_in_range(&self, cell_key: i32, start_key: i32, end_key: i32) -> bool {
+        let (cell_row, cell_col) = self.get_row_col(cell_key);
+        let (start_row, start_col) = self.get_row_col(start_key);
+        let (end_row, end_col) = self.get_row_col(end_key);
+        
+        cell_row >= start_row && cell_row <= end_row && 
+        cell_col >= start_col && cell_col <= end_col
+    }
+    
+    // Get all range-based children for a cell
+    pub fn get_range_children(&self, cell_key: i32) -> Vec<i32> {
+        let mut result = Vec::new();
+        for range in &self.range_children {
+            if self.is_cell_in_range(cell_key, range.start_key, range.end_key) {
+                result.push(range.child_key);
+            }
+        }
+        result
+    }
+
+    // Add a child to a cell's dependents (modified for HashMap of boxed HashSets)
+    pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
+        self.children
+            .entry(*parent_key)
+            .or_insert_with(|| Box::new(HashSet::with_capacity(4)))
+            .insert(*child_key);
+    }
+    
+    // Remove a child from a cell's dependents (modified for HashMap of boxed HashSets)
     pub fn remove_child(&mut self, parent_key: i32, child_key: i32) {
-        let parent_index = parent_key as usize;
-        self.children[parent_index].remove(&child_key);
+        if let Some(children) = self.children.get_mut(&parent_key) {
+            children.remove(&child_key);
+            
+            // If the hashset is now empty, remove it from the HashMap to save memory
+            if children.is_empty() {
+                self.children.remove(&parent_key);
+            }
+        }
     }
       
-    // Get children for a cell (immutable) (modified for Vec of boxed HashSets)
+    // Get children for a cell (immutable) (modified for HashMap of boxed HashSets)
     pub fn get_cell_children(&self, key: i32) -> Option<&HashSet<i32>> {
-        let index = key as usize;
-        let children = &self.children[index];
-        if children.is_empty() {
-            None
-        } else {
-            Some(children)
-        }
+        self.children.get(&key).map(|boxed_set| boxed_set.as_ref())
     }
 
     pub fn print_spreadsheet(&self) {

@@ -18,14 +18,8 @@ pub fn add_children(sheet: &mut Spreadsheet, cell1: i32, cell2: i32, formula: i1
         sheet.add_child(&cell2, &child_key);
     }
     else {
-        let (start_row, start_col) = sheet.get_row_col(cell1);
-        let (end_row, end_col) = sheet.get_row_col(cell2);
-        for i in start_row..=end_row {
-            for j in start_col..=end_col {
-                let parent_key = sheet.get_key(i, j);
-                sheet.add_child(&parent_key, &child_key);
-            }
-        }
+        // For range operations, use the optimized range_children structure
+        sheet.add_range_child(cell1, cell2, child_key);
     }
 }
 
@@ -49,15 +43,8 @@ pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
     let rem = (meta.formula % 10) as i16;
     
     if rem >= 5 && rem <= 9 {
-        let (start_row, start_col) = sheet.get_row_col(meta.parent1);
-        let (end_row, end_col) = sheet.get_row_col(meta.parent2);
-
-        for i in start_row..=end_row {
-            for j in start_col..=end_col {
-                let parent_key = sheet.get_key(i, j);
-                sheet.remove_child(parent_key, child_key);
-            }
-        }
+        // Use the optimized range_children removal for range operations
+        sheet.remove_range_child(child_key);
     }
     else if rem == 0 {
         let parent1= meta.parent1;

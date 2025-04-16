@@ -123,9 +123,9 @@ pub fn toposort_reval_detect_cycle(sheet: &mut Spreadsheet, row: i16, col: i16, 
     let mut dfs_stack: Vec<(i32, bool)> = Vec::new();
     let mut in_current_path: HashSet<i32> = HashSet::new();
     
-    // Helper to push all dependents (both direct and via ranges) for a given cell key.
+    // Helper to push all dependents (both direct and range-based) for a given cell key
     fn push_dependents(cell_key: i32, sheet: &Spreadsheet, stack: &mut Vec<(i32, bool)>, fully_visited: &HashSet<i32>) {
-        // Direct children
+        // Direct children from standard dependencies
         if let Some(children) = sheet.get_cell_children(cell_key) {
             for child in children {
                 if !fully_visited.contains(&child) {
@@ -134,18 +134,15 @@ pub fn toposort_reval_detect_cycle(sheet: &mut Spreadsheet, row: i16, col: i16, 
             }
         }
         
-        // // Range dependencies: if cell_key can be parsed to a CellRef, then search range children
-        // if let Some(cell_ref) = string_to_cell(cell_key) {
-        //     for (range_ref, dependent) in sheet.range_children {
-        //         // Use dependent only if not already visited
-        //         if !range_ref.contains(&cell_ref) || fully_visited.contains(&dependent) {
-        //             continue;
-        //         }
-        //         stack.push((dependent.clone(), false));
-        //     }
-        // }
+        // Range-based children
+        for child_key in sheet.get_range_children(cell_key) {
+            if !fully_visited.contains(&child_key) {
+                stack.push((child_key, false));
+            }
+        }
     }
-    // Start from all direct children (and those from range deps) of the updated cell
+    
+    // Start from all direct children and range-based children of the updated cell
     push_dependents(cell_key, sheet, &mut dfs_stack, &fully_visited);
     
     while let Some((current, expanded)) = dfs_stack.pop() {
@@ -167,7 +164,7 @@ pub fn toposort_reval_detect_cycle(sheet: &mut Spreadsheet, row: i16, col: i16, 
             dfs_stack.push((current, true));
             in_current_path.insert(current);
             
-            // Process all its dependents
+            // Process all its dependents (both direct and range-based)
             push_dependents(current, sheet, &mut dfs_stack, &fully_visited);
         }
     }
