@@ -54,6 +54,16 @@ impl CellMeta {
     }
 }
 
+impl Default for CellMeta {
+    fn default() -> Self {
+        CellMeta {
+            formula: -1,
+            parent1: -1,
+            parent2: -1,
+        }
+    }
+}
+
 // Spreadsheet structure with HashMap of boxed HashSets for children
 pub struct Spreadsheet {
     pub grid: Vec<CellValue>,                                // Vector of CellValues (contiguous in memory)
@@ -62,8 +72,8 @@ pub struct Spreadsheet {
     pub cell_meta: HashMap<i32, CellMeta>,                   // Map from cell key to metadata
     pub rows: i16,
     pub cols: i16,
-    viewport_row: i16,
-    viewport_col: i16,
+    pub viewport_row: i16,
+    pub viewport_col: i16,
     pub output_enabled: bool,
 }
 
@@ -117,6 +127,13 @@ impl Spreadsheet {
         let key = self.get_key(row, col);
         self.cell_meta.entry(key).or_insert_with(CellMeta::new)
     }
+
+
+    pub fn get_cell_meta_mut(&mut self, row: i16, col: i16) -> &mut CellMeta {
+        let key = self.get_key(row, col);
+        self.cell_meta.entry(key).or_insert(CellMeta::default())
+    }
+
     
     pub fn get_column_name(&self, mut col: i16) -> String {
         // Pre-calculate the length needed for the string
@@ -566,6 +583,7 @@ impl Spreadsheet {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cell::CellValue;
 
     #[test]
     fn test_create_valid_dimensions() {
@@ -613,6 +631,59 @@ mod tests {
     }
 
     #[test]
+    fn test_get_key_and_row_col() {
+        let sheet = Spreadsheet::create(5, 5).unwrap();
+        let key = sheet.get_key(2, 3);
+        let (row, col) = sheet.get_row_col(key);
+        assert_eq!(row, 2);
+        assert_eq!(col, 3);
+    }
+
+    #[test]
+    fn test_get_cell_meta() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let meta = sheet.get_cell_meta(1, 1);
+        assert_eq!(meta.formula, -1);
+        assert_eq!(meta.parent1, -1);
+        assert_eq!(meta.parent2, -1);
+        meta.formula = 10;
+        assert_eq!(sheet.get_cell_meta(1, 1).formula, 10);
+    }
+
+    #[test]
+    fn test_add_remove_child() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let parent = sheet.get_key(0, 0);
+        let child = sheet.get_key(1, 1);
+        sheet.add_child(&parent, &child);
+        assert!(sheet.get_cell_children(parent).unwrap().contains(&child));
+        sheet.remove_child(parent, child);
+        assert!(sheet.get_cell_children(parent).is_none());
+    }
+
+    #[test]
+    fn test_add_remove_range_child() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(1, 1);
+        let child = sheet.get_key(2, 2);
+        sheet.add_range_child(parent1, parent2, child);
+        assert!(sheet.get_range_children(parent1).contains(&child));
+        sheet.remove_range_child(child);
+        assert!(!sheet.get_range_children(parent1).contains(&child));
+    }
+
+    #[test]
+    fn test_is_cell_in_range() {
+        let sheet = Spreadsheet::create(5, 5).unwrap();
+        let cell_key = sheet.get_key(1, 1);
+        let start_key = sheet.get_key(0, 0);
+        let end_key = sheet.get_key(2, 2);
+        assert!(sheet.is_cell_in_range(cell_key, start_key, end_key));
+        assert!(!sheet.is_cell_in_range(cell_key, end_key, start_key));
+    }
+
+    #[test]
     fn test_scroll_to_cell_valid() {
         let mut sheet = Spreadsheet::create(20, 20).unwrap();
         let status = sheet.scroll_to_cell("B2");
@@ -639,7 +710,6 @@ mod tests {
         assert_eq!(sheet.viewport_row, 0);
         sheet.scroll_viewport('a');
         assert_eq!(sheet.viewport_col, 0);
-        // Test boundaries
         sheet.viewport_row = 45;
         sheet.scroll_viewport('s');
         assert_eq!(sheet.viewport_row, 40);
@@ -649,6 +719,15 @@ mod tests {
     fn test_print_spreadsheet_disabled() {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
         sheet.output_enabled = false;
+        sheet.print_spreadsheet(); // Should not panic
+    }
+
+    #[test]
+    fn test_print_spreadsheet_with_values() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(42);
+        *sheet.get_mut_cell(1, 1) = CellValue::Error;
+        sheet.output_enabled = true;
         sheet.print_spreadsheet(); // Should not panic
     }
 }
