@@ -63,16 +63,67 @@ pub fn parse_cell_reference(sheet: &Spreadsheet, cell_ref: &str) -> Result<(i16,
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::spreadsheet::{CommandStatus, Spreadsheet};
+
+    fn create_test_spreadsheet(rows: i16, cols: i16) -> Spreadsheet {
+        Spreadsheet::create(rows, cols).unwrap()
+    }
 
     #[test]
-    fn test_parse_cell_reference() {
-        let sheet = Spreadsheet::create(10, 10).unwrap();
+    fn test_parse_cell_reference_valid() {
+        let sheet = create_test_spreadsheet(10, 10);
         assert_eq!(parse_cell_reference(&sheet, "A1"), Ok((0, 0)));
         assert_eq!(parse_cell_reference(&sheet, "B2"), Ok((1, 1)));
         assert_eq!(parse_cell_reference(&sheet, "AA10"), Ok((9, 26)));
-        assert_eq!(parse_cell_reference(&sheet, "1A"), Err(CommandStatus::CmdUnrecognized));
-        assert_eq!(parse_cell_reference(&sheet, "A"), Err(CommandStatus::CmdUnrecognized));
-        assert_eq!(parse_cell_reference(&sheet, "A1B"), Err(CommandStatus::CmdUnrecognized));
-        assert_eq!(parse_cell_reference(&sheet, "AAAA1"), Err(CommandStatus::CmdUnrecognized));
+        assert_eq!(parse_cell_reference(&sheet, "ZZZ999"), Ok((998, 18277)));
+    }
+
+    #[test]
+    fn test_parse_cell_reference_invalid() {
+        let sheet = create_test_spreadsheet(10, 10);
+        assert_eq!(
+            parse_cell_reference(&sheet, "1A"),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+        assert_eq!(
+            parse_cell_reference(&sheet, "A"),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+        assert_eq!(
+            parse_cell_reference(&sheet, "A1B"),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+        assert_eq!(
+            parse_cell_reference(&sheet, "AAAA1"),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+        assert_eq!(
+            parse_cell_reference(&sheet, ""),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+    }
+
+    #[test]
+    fn test_parse_cell_reference_bounds() {
+        let sheet = create_test_spreadsheet(10, 10);
+        assert_eq!(
+            parse_cell_reference(&sheet, "A1000"),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+        assert_eq!(
+            parse_cell_reference(&sheet, "ZZZ1000"),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+        assert_eq!(
+            parse_cell_reference(&sheet, "A0"),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+    }
+
+    #[test]
+    fn test_cell_value_equality() {
+        assert_eq!(CellValue::Integer(42), CellValue::Integer(42));
+        assert_eq!(CellValue::Error, CellValue::Error);
+        assert_ne!(CellValue::Integer(42), CellValue::Error);
     }
 }

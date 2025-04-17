@@ -535,3 +535,218 @@ pub fn handle_command(
     // No recognized command
     CommandStatus::CmdUnrecognized
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cell::CellValue;
+    use crate::spreadsheet::{CommandStatus, Spreadsheet};
+
+    fn create_test_spreadsheet(rows: i16, cols: i16) -> Spreadsheet {
+        Spreadsheet::create(rows, cols).unwrap()
+    }
+
+    #[test]
+    fn test_handle_sleep_with_reference() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_sleep(&mut sheet, 1, 1, "A1", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5));
+        assert_eq!(sleep_time, 5.0);
+        let meta = sheet.cell_meta.get(&sheet.get_key(1, 1)).unwrap();
+        assert_eq!(meta.formula, 102);
+        assert_eq!(meta.parent1, sheet.get_key(0, 0));
+    }
+
+    #[test]
+    fn test_handle_sleep_with_literal() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_sleep(&mut sheet, 1, 1, "3", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3));
+        assert_eq!(sleep_time, 3.0);
+        assert!(!sheet.cell_meta.contains_key(&sheet.get_key(1, 1)));
+    }
+
+    #[test]
+    fn test_handle_sleep_invalid() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_sleep(&mut sheet, 1, 1, "INVALID", &mut sleep_time),
+            CommandStatus::CmdUnrecognized
+        );
+    }
+
+    #[test]
+    fn test_handle_sleep_self_reference() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_sleep(&mut sheet, 1, 1, "B2", &mut sleep_time),
+            CommandStatus::CmdCircularRef
+        );
+    }
+
+    #[test]
+    fn test_evaluate_arithmetic_literal() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        assert_eq!(
+            evaluate_arithmetic(&mut sheet, 0, 0, "42"),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(42));
+        assert!(!sheet.cell_meta.contains_key(&sheet.get_key(0, 0)));
+    }
+
+    #[test]
+    fn test_evaluate_arithmetic_cell_ref() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(10);
+        assert_eq!(
+            evaluate_arithmetic(&mut sheet, 1, 1, "A1"),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(10));
+        let meta = sheet.cell_meta.get(&sheet.get_key(1, 1)).unwrap();
+        assert_eq!(meta.formula, 82);
+        assert_eq!(meta.parent1, sheet.get_key(0, 0));
+    }
+
+    #[test]
+    fn test_evaluate_arithmetic_binary_add() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
+        assert_eq!(
+            evaluate_arithmetic(&mut sheet, 1, 1, "A1+3"),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(8));
+        let meta = sheet.cell_meta.get(&sheet.get_key(1, 1)).unwrap();
+        assert_eq!(meta.formula, 12);
+        assert_eq!(meta.parent1, sheet.get_key(0, 0));
+        assert_eq!(meta.parent2, 3);
+    }
+
+    #[test]
+    fn test_evaluate_arithmetic_binary_div_zero() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
+        assert_eq!(
+            evaluate_arithmetic(&mut sheet, 1, 1, "A1/0"),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
+    }
+
+    #[test]
+    fn test_evaluate_formula_sum() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "SUM(A1:B1)", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3));
+        let meta = sheet.cell_meta.get(&sheet.get_key(1, 1)).unwrap();
+        assert_eq!(meta.formula, 5);
+    }
+
+    #[test]
+    fn test_evaluate_formula_invalid() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "SUM(A1)", &mut sleep_time),
+            CommandStatus::CmdUnrecognized
+        );
+    }
+
+    #[test]
+    fn test_set_cell_value_with_cycle() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            set_cell_value(&mut sheet, 0, 0, "A1", &mut sleep_time),
+            CommandStatus::CmdCircularRef
+        );
+    }
+
+    #[test]
+    fn test_handle_command_scroll() {
+        let mut sheet = create_test_spreadsheet(50, 50);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "s", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.viewport_row, 10);
+        assert_eq!(
+            handle_command(&mut sheet, "d", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.viewport_col, 10);
+    }
+
+    #[test]
+    fn test_handle_command_output_toggle() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "disable_output", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert!(!sheet.output_enabled);
+        assert_eq!(
+            handle_command(&mut sheet, "enable_output", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert!(sheet.output_enabled);
+    }
+
+    #[test]
+    fn test_handle_command_visualize() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "visualize A1", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(
+            handle_command(&mut sheet, "visualize Z9", &mut sleep_time),
+            CommandStatus::CmdInvalidCell
+        );
+    }
+
+    #[test]
+    fn test_handle_command_scroll_to() {
+        let mut sheet = create_test_spreadsheet(50, 50);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "scroll_to B2", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.viewport_row, 1);
+        assert_eq!(sheet.viewport_col, 1);
+    }
+
+    #[test]
+    fn test_handle_command_assignment() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "A1=42", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(42));
+    }
+}
