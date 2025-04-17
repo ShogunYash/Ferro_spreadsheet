@@ -127,78 +127,85 @@ pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
 //     false
 // }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::cell::CellValue;
-    
-//     #[test]
-//     fn test_remove_all_parents() {
-//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        
-//         // Set up parent-child relationships
-//         let meta = sheet.get_cell_meta(0, 0);
-//         meta.parent1 = sheet.get_key(1, 1);
-//         meta.parent2 = sheet.get_key(2, 2);
-        
-//         add_children(&mut sheet, meta.parent1, meta.parent2, 5, 0, 0);
-        
-//         // Verify children are set up correctly
-//         assert!(sheet.get_cell_children(meta.parent1).unwrap().contains(&sheet.get_key(0, 0)));
-//         assert!(sheet.get_cell_children(meta.parent2).unwrap().contains(&sheet.get_key(0, 0)));
-        
-//         // Remove all parents
-//         remove_all_parents(&mut sheet, 0, 0);
-        
-//         // Verify children are removed
-//         assert!(sheet.get_cell_children(meta.parent1).is_none() || 
-//                !sheet.get_cell_children(meta.parent1).unwrap().contains(&sheet.get_key(0, 0)));
-        
-//         assert!(sheet.get_cell_children(meta.parent2).is_none() || 
-//                !sheet.get_cell_children(meta.parent2).unwrap().contains(&sheet.get_key(0, 0)));
-//     }
-    
-//     #[test]
-//     fn test_add_children() {
-//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        
-//         // Add a child with single parent
-//         add_children(&mut sheet, sheet.get_key(1, 1), -1, 82, 0, 0);
-//         assert!(sheet.get_cell_children(sheet.get_key(1, 1)).unwrap().contains(&sheet.get_key(0, 0)));
-        
-//         // Add a child with range parents (SUM formula)
-//         add_children(&mut sheet, sheet.get_key(2, 2), sheet.get_key(3, 3), 5, 0, 1);
-        
-//         // Verify all cells in the range have the child
-//         for r in 2..=3 {
-//             for c in 2..=3 {
-//                 assert!(sheet.get_cell_children(sheet.get_key(r, c)).unwrap().contains(&sheet.get_key(0, 1)));
-//             }
-//         }
-//     }
-    
-//     #[test]
-//     fn test_detect_cycle() {
-//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        
-//         // Set up a dependency chain: A1 -> B1 -> C1
-//         *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);  // A1 = 1
-//         *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);  // B1 = 2
-        
-//         let a1_key = sheet.get_key(0, 0);
-//         let b1_key = sheet.get_key(0, 1);
-//         let c1_key = sheet.get_key(0, 2);
-        
-//         // B1 depends on A1
-//         add_children(&mut sheet, a1_key, -1, 82, 0, 1);
-        
-//         // C1 depends on B1
-//         add_children(&mut sheet, b1_key, -1, 82, 0, 2);
-        
-//         // No cycle yet
-//         assert!(!detect_cycle(&sheet, a1_key, -1, 82, c1_key));
-        
-//         // This would create a cycle: A1 depends on C1
-//         assert!(detect_cycle(&sheet, c1_key, -1, 82, a1_key));
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cell::CellValue;
+    use crate::spreadsheet::{CommandStatus, Spreadsheet};
+
+    fn create_test_spreadsheet(rows: i16, cols: i16) -> Spreadsheet {
+        Spreadsheet::create(rows, cols).unwrap()
+    }
+
+    #[test]
+    fn test_add_children_both_parents() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(0, 1);
+        let child = sheet.get_key(1, 1);
+        add_children(&mut sheet, parent1, parent2, 0, 1, 1); // Formula type 0
+        assert!(sheet.get_cell_children(parent1).unwrap().contains(&child));
+        assert!(sheet.get_cell_children(parent2).unwrap().contains(&child));
+    }
+
+    #[test]
+    fn test_add_children_single_parent() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let parent1 = sheet.get_key(0, 0);
+        let child = sheet.get_key(1, 1);
+        add_children(&mut sheet, parent1, -1, 2, 1, 1); // Formula type 2
+        assert!(sheet.get_cell_children(parent1).unwrap().contains(&child));
+        assert!(sheet.get_cell_children(-1).is_none());
+    }
+
+    #[test]
+    fn test_add_children_range() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(1, 1);
+        let child = sheet.get_key(2, 2);
+        add_children(&mut sheet, parent1, parent2, 5, 2, 2); // Formula type 5 (SUM)
+        let range_children = sheet.get_range_children(parent1);
+        assert!(range_children.contains(&child));
+        let range_children = sheet.get_range_children(parent2);
+        assert!(range_children.contains(&child));
+    }
+
+    #[test]
+    fn test_remove_all_parents_no_meta() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        remove_all_parents(&mut sheet, 1, 1);
+        assert!(!sheet.cell_meta.contains_key(&sheet.get_key(1, 1)));
+    }
+
+    #[test]
+    fn test_remove_all_parents_single_parent() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let parent1 = sheet.get_key(0, 0);
+        let child = sheet.get_key(1, 1);
+        add_children(&mut sheet, parent1, -1, 2, 1, 1); 
+        let meta = sheet.get_cell_meta_mut(1, 1); 
+        meta.parent1 = parent1;
+        meta.formula = 2; 
+        remove_all_parents(&mut sheet, 1, 1);
+        let children = sheet.get_cell_children(parent1);
+        assert!(children.is_none() || !children.unwrap().contains(&child));
+    }
+
+    #[test]
+    fn test_remove_all_parents_range() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(1, 1);
+        let child = sheet.get_key(2, 2);
+        add_children(&mut sheet, parent1, parent2, 5, 2, 2); // adds range child
+        let meta = sheet.get_cell_meta_mut(2, 2); 
+        meta.parent1 = parent1;
+        meta.parent2 = parent2;
+        meta.formula = 5;
+        remove_all_parents(&mut sheet, 2, 2);
+        let range_children1 = sheet.get_range_children(parent1);
+        let range_children2 = sheet.get_range_children(parent2);
+        assert!(!range_children1.contains(&child));
+        assert!(!range_children2.contains(&child));
+    }}
