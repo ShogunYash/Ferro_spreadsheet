@@ -1,6 +1,7 @@
 use crate::cell::{CellValue, parse_cell_reference};
 use crate::spreadsheet::{Spreadsheet, CommandStatus};
 
+#[derive(Debug, PartialEq)]
 pub struct Range {
     pub start_row: i16,
     pub start_col: i16,
@@ -172,45 +173,161 @@ pub fn parse_range(spreadsheet: &Spreadsheet, range_str: &str) -> Result<Range, 
     })
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cell::CellValue;
+    use crate::spreadsheet::{CommandStatus, Spreadsheet};
 
-//     #[test]
-//     fn test_sum_value() {
-//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-//         *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
-//         *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);
-//         let range = Range { start_row: 0, start_col: 0, end_row: 0, end_col: 1 };
-//         assert_eq!(sum_value(&mut sheet, 1, 1, &range), CommandStatus::CmdOk);
-//         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3));
-//     }
+    fn create_test_spreadsheet(rows: i16, cols: i16) -> Spreadsheet {
+        Spreadsheet::create(rows, cols).unwrap()
+    }
 
-//     #[test]
-//     fn test_eval_variance() {
-//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-//         *sheet.get_mut_cell(0, 0) = CellValue::Integer(2);
-//         *sheet.get_mut_cell(0, 1) = CellValue::Integer(4);
-//         let range = Range { start_row: 0, start_col: 0, end_row: 0, end_col: 1 };
-//         assert_eq!(eval_variance(&mut sheet, 1, 1, &range), CommandStatus::CmdOk);
-//     }
+    #[test]
+    fn test_sum_value() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(0, 1);
+        assert_eq!(
+            sum_value(&mut sheet, 1, 1, parent1, parent2),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3));
+    }
 
-//     #[test]
-//     fn test_eval_min_max() {
-//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-//         *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
-//         *sheet.get_mut_cell(0, 1) = CellValue::Integer(3);
-//         let range = Range { start_row: 0, start_col: 0, end_row: 0, end_col: 1 };
-//         assert_eq!(eval_min(&mut sheet, 1, 1, &range), CommandStatus::CmdOk);
-//         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(1));
-//         assert_eq!(eval_max(&mut sheet, 1, 2, &range), CommandStatus::CmdOk);
-//         assert_eq!(*sheet.get_cell(1, 2), CellValue::Integer(3));
-//     }
+    #[test]
+    fn test_sum_value_error() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        *sheet.get_mut_cell(0, 1) = CellValue::Error;
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(0, 1);
+        assert_eq!(
+            sum_value(&mut sheet, 1, 1, parent1, parent2),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
+    }
 
-//     #[test]
-//     fn test_parse_range() {
-//         let sheet = Spreadsheet::create(5, 5).unwrap();
-//         assert!(parse_range(&sheet, "A1:B2").is_ok());
-//         assert!(parse_range(&sheet, "A").is_err());
-//     }
-// }
+    #[test]
+    fn test_eval_variance() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(2);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(4);
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(0, 1);
+        assert_eq!(
+            eval_variance(&mut sheet, 1, 1, parent1, parent2),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(1));
+    }
+
+    #[test]
+    fn test_eval_variance_error() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Error;
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(4);
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(0, 1);
+        assert_eq!(
+            eval_variance(&mut sheet, 1, 1, parent1, parent2),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
+    }
+
+    #[test]
+    fn test_eval_min() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(3);
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(0, 1);
+        assert_eq!(
+            eval_min(&mut sheet, 1, 1, parent1, parent2),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(1));
+    }
+
+    #[test]
+    fn test_eval_max() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(3);
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(0, 1);
+        assert_eq!(
+            eval_max(&mut sheet, 1, 2, parent1, parent2),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 2), CellValue::Integer(3));
+    }
+
+    #[test]
+    fn test_eval_min_max_error() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        *sheet.get_mut_cell(0, 1) = CellValue::Error;
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(0, 1);
+        assert_eq!(
+            eval_min(&mut sheet, 1, 1, parent1, parent2),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
+        assert_eq!(
+            eval_max(&mut sheet, 1, 2, parent1, parent2),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 2), CellValue::Error);
+    }
+
+    #[test]
+    fn test_eval_avg() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(2);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(4);
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(0, 1);
+        assert_eq!(
+            eval_avg(&mut sheet, 1, 1, parent1, parent2),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3));
+    }
+
+    #[test]
+    fn test_parse_range_valid() {
+        let sheet = create_test_spreadsheet(5, 5);
+        let range = parse_range(&sheet, "A1:B2").unwrap();
+        assert_eq!(range.start_row, 0);
+        assert_eq!(range.start_col, 0);
+        assert_eq!(range.end_row, 1);
+        assert_eq!(range.end_col, 1);
+    }
+
+    #[test]
+    fn test_parse_range_invalid() {
+        let sheet = create_test_spreadsheet(5, 5);
+        assert_eq!(
+            parse_range(&sheet, "A"),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+        assert_eq!(
+            parse_range(&sheet, "A1:"),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+        assert_eq!(
+            parse_range(&sheet, ":A1"),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+        assert_eq!(
+            parse_range(&sheet, "B2:A1"),
+            Err(CommandStatus::CmdUnrecognized)
+        );
+    }
+}
