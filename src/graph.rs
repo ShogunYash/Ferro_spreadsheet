@@ -1,12 +1,11 @@
 use crate::spreadsheet::Spreadsheet;
 
 pub fn add_children(sheet: &mut Spreadsheet, cell1: i32, cell2: i32, formula: i16, row: i16, col: i16) {
-    let rem = formula % 10;
-    let child_key = sheet.get_key(row, col);
     if formula == -1 {
         return;
     }
-    
+    let rem = formula % 10;
+    let child_key = sheet.get_key(row, col);
     if rem == 0 {
         sheet.add_child(&cell1, &child_key);
         sheet.add_child(&cell2, &child_key);
@@ -27,20 +26,16 @@ pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
     // This removes the child row, col from its parent cells
     let child_key = sheet.get_key(row, col);
     
-    // Get metadata for this cell
-    if !sheet.cell_meta.contains_key(&child_key) {
-        return; // No metadata, no parents to remove
-    }
-    
     let meta = match sheet.cell_meta.get(&child_key) {
         Some(meta) => meta,
         None => return, // No metadata, no parents to remove
     };
+    
     if meta.formula == -1 {
         return;
     }
     
-    let rem = (meta.formula % 10) as i16;
+    let rem: i16 = (meta.formula % 10) as i16;
     
     if rem >= 5 && rem <= 9 {
         // Use the optimized range_children removal for range operations

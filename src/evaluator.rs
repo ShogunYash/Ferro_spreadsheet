@@ -24,9 +24,6 @@ pub fn handle_sleep(
         if row == target_row && col == target_col {
             return CommandStatus::CmdCircularRef;
         }
-        
-        // Store old metadata and value for possible restoration
-        // let old_meta = sheet.cell_meta.get(&cell_key).cloned();
 
         // Remove parents and update cell in one block
         remove_all_parents(sheet, row, col);
@@ -67,9 +64,9 @@ pub fn handle_sleep(
         // Remove all parents and update cell in one sequence
         remove_all_parents(sheet, row, col);
         // Update cell value and sleep_time
-        sleep_fn(sheet, row, col, val, sleep_time);
         // Delete the cell meta entry
         sheet.cell_meta.remove(&cell_key);
+        sleep_fn(sheet, row, col, val, sleep_time);
     }
     else {
         return CommandStatus::CmdUnrecognized;
@@ -89,12 +86,11 @@ pub fn evaluate_arithmetic(
     // Case 1: Integer literal
     if let Ok(number) = expr.parse::<i32>() {
         remove_all_parents(sheet, row, col);
-        
-        *sheet.get_mut_cell(row, col) = CellValue::Integer(number);
-        
         // As no parents and formula remove the meta data from the set and map
         // to avoid memory leaks
         sheet.cell_meta.remove(&cell_key);
+        *sheet.get_mut_cell(row, col) = CellValue::Integer(number);
+        
         return CommandStatus::CmdOk;
     }
     
@@ -113,11 +109,6 @@ pub fn evaluate_arithmetic(
                 
                 // Get reference cell key and value
                 let ref_cell_key = sheet.get_key(target_row, target_col);
-                let ref_cell_value = match sheet.get_cell(target_row, target_col) {
-                    CellValue::Integer(val) => CellValue::Integer(*val),
-                    _ => CellValue::Error,
-                };
-
                 // Save old state
                 // let old_meta = sheet.cell_meta.get(&cell_key).cloned();
                 
@@ -147,7 +138,10 @@ pub fn evaluate_arithmetic(
                 add_children(sheet, ref_cell_key, -1, 82, row, col);
                 
                 // Update cell value
-                *sheet.get_mut_cell(row, col) = ref_cell_value ;
+                *sheet.get_mut_cell(row, col) =  match sheet.get_cell(target_row, target_col) {
+                    CellValue::Integer(val) => CellValue::Integer(*val),
+                    _ => CellValue::Error,
+                };
                 return CommandStatus::CmdOk;
             },
             Err(status) => return status
@@ -242,7 +236,6 @@ pub fn evaluate_arithmetic(
     }
     
     // Save old metadata for restoration if needed
-    // let old_meta = sheet.cell_meta.get(&cell_key).cloned();
     
     // Remove old dependencies
     remove_all_parents(sheet, row, col);
@@ -266,12 +259,10 @@ pub fn evaluate_arithmetic(
     }
     
     // Set metadata
-    {
-        let meta = sheet.get_cell_meta(row, col);
-        meta.formula = formula_type;
-        meta.parent1 = if left_is_cell { left_cell_key } else { left_val };
-        meta.parent2 = if right_is_cell { right_cell_key } else { right_val };
-    }
+    let meta = sheet.get_cell_meta(row, col);
+    meta.formula = formula_type;
+    meta.parent1 = if left_is_cell { left_cell_key } else { left_val };
+    meta.parent2 = if right_is_cell { right_cell_key } else { right_val };
     
     // Check for circular references
     // let mut has_cycle = false;
@@ -393,18 +384,12 @@ pub fn evaluate_formula(
         // let cell_key = sheet.get_key(row, col);
         let parent1 = sheet.get_key(range.start_row, range.start_col);
         let parent2 = sheet.get_key(range.end_row, range.end_col);
-
-        // Store old metadata for possible restoration
-        // let old_meta = sheet.cell_meta.get(&cell_key).cloned();
-
-        // 
-            remove_all_parents(sheet, row, col); 
-            // Update metadata
-            let meta = sheet.get_cell_meta(row, col);
-            meta.parent1 = parent1;
-            meta.parent2 = parent2;
-            meta.formula = formula_type;
-        // 
+        remove_all_parents(sheet, row, col); 
+        // Update metadata
+        let meta = sheet.get_cell_meta(row, col);
+        meta.parent1 = parent1;
+        meta.parent2 = parent2;
+        meta.formula = formula_type;
 
         // // Check for circular reference
         // if detect_cycle(sheet, parent1, parent2, formula_type, cell_key) {
@@ -441,21 +426,30 @@ pub fn evaluate_formula(
 
 pub fn set_cell_value(sheet: &mut Spreadsheet, row: i16, col: i16, expr: &str, sleep_time: &mut f64) -> CommandStatus {
     let old_meta = sheet.cell_meta.get(&sheet.get_key(row, col)).cloned();
+    let old_value = match sheet.get_cell(row, col) {
+        CellValue::Integer(val) => CellValue::Integer(*val),
+        _ => CellValue::Error,
+    };
     let status: CommandStatus = evaluate_formula(sheet, row, col, expr, sleep_time);
     if let CommandStatus::CmdOk = status {
         // Reevaluate the cell dependents graphs i.e. all of its children
         // Also at same time check for cycle in the graph as it will save time and memory
         let has_cycle = toposort_reval_detect_cycle(sheet, row, col, sleep_time);
         if has_cycle {
+            // If a cycle is detected, restore the old parents and formula
+            // Remove the new parents and formula
+            remove_all_parents(sheet, row, col);
+            // Restore the old value
+            *sheet.get_mut_cell(row, col) = old_value;
             // Old meta 
             if let Some(old) = old_meta {
-                remove_all_parents(sheet, row, col);
                 let (parent1, parent2, formula) = (old.parent1, old.parent2, old.formula);
                 sheet.cell_meta.insert(sheet.get_key(row, col), old);
                 add_children(sheet, parent1, parent2, formula, row, col);
             } else {
                 sheet.cell_meta.remove(&sheet.get_key(row, col));
             }
+
             return CommandStatus::CmdCircularRef;
         }
     }

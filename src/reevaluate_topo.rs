@@ -133,9 +133,9 @@ pub fn toposort_reval_detect_cycle(sheet: &mut Spreadsheet, row: i16, col: i16, 
                 }
             }
         }
-        
+        let children = sheet.get_range_children(cell_key);
         // Range-based children
-        for child_key in sheet.get_range_children(cell_key) {
+        for child_key in children {
             if !fully_visited.contains(&child_key) {
                 stack.push((child_key, false));
             }
@@ -157,6 +157,10 @@ pub fn toposort_reval_detect_cycle(sheet: &mut Spreadsheet, row: i16, col: i16, 
             // If we haven't expanded this node yet:
             if in_current_path.contains(&current) {
                 // Cycle detected
+                // Debugging output
+                // println!("Cycle detected at cell: {}", current);
+                // Uncomment the following line to see the cycle path
+                // println!("Cycle path: {:?}", in_current_path);
                 return true;
             }
             

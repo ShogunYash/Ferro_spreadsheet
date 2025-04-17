@@ -1,6 +1,6 @@
 .PHONY: all clean run
 
-all: clean target/release/spreadsheet
+all: target/release/spreadsheet
 
 target/release/spreadsheet:
 	cargo build --release

@@ -214,7 +214,7 @@ impl Spreadsheet {
     pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
         self.children
             .entry(*parent_key)
-            .or_insert_with(|| Box::new(HashSet::with_capacity(4)))
+            .or_insert_with(|| Box::new(HashSet::with_capacity(5)))
             .insert(*child_key);
     }
     
@@ -318,6 +318,7 @@ impl Spreadsheet {
             _ => {} // Invalid direction, do nothing
         }
     }
+    
     pub fn visualize_cell_relationships(&self, row: i16, col: i16) -> CommandStatus {
         // Check if the cell is valid
         if row < 0 || row >= self.rows || col < 0 || col >= self.cols {
