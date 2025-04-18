@@ -109,9 +109,7 @@ pub fn evaluate_arithmetic(
                 
                 // Get reference cell key and value
                 let ref_cell_key = sheet.get_key(target_row, target_col);
-                // Save old state
-                // let old_meta = sheet.cell_meta.get(&cell_key).cloned();
-                
+
                 // Remove old dependencies and set new ones
                 remove_all_parents(sheet, row, col);
                 
@@ -120,19 +118,6 @@ pub fn evaluate_arithmetic(
                 meta.parent1 = ref_cell_key;
                 meta.parent2 = -1;
                 meta.formula = 82;  // Code for simple cell reference
-                
-                // Check for cycles
-                // if detect_cycle(sheet, ref_cell_key, -1, 82, cell_key) {
-                //     // Restore old state if cycle detected
-                //     if let Some(old) = old_meta {
-                //         let (parent1, parent2, formula) = (old.parent1, old.parent2, old.formula);
-                //         sheet.cell_meta.insert(cell_key, old);
-                //         add_children(sheet, parent1, parent2, formula, row, col);
-                //     } else {
-                //         sheet.cell_meta.remove(&cell_key);
-                //     }
-                //     return CommandStatus::CmdCircularRef;
-                // }
                 
                 // Add dependency
                 add_children(sheet, ref_cell_key, -1, 82, row, col);
@@ -235,8 +220,6 @@ pub fn evaluate_arithmetic(
         }
     }
     
-    // Save old metadata for restoration if needed
-    
     // Remove old dependencies
     remove_all_parents(sheet, row, col);
     
@@ -265,30 +248,6 @@ pub fn evaluate_arithmetic(
     meta.parent2 = if right_is_cell { right_cell_key } else { right_val };
     
     // Check for circular references
-    // let mut has_cycle = false;
-    
-    // if left_is_cell && right_is_cell {
-    //     has_cycle = detect_cycle(sheet, left_cell_key, right_cell_key, formula_type, cell_key);
-    // }
-    // else if left_is_cell {
-    //     has_cycle = detect_cycle(sheet, left_cell_key, -1, formula_type, cell_key);
-    // }
-    // else if right_is_cell {
-    //     has_cycle = detect_cycle(sheet, -1, right_cell_key, formula_type, cell_key);
-    // }
-    
-    // if has_cycle {
-    //     // Restore old state
-    //     if let Some(old) = old_meta {
-    //         let (parent1, parent2, formula) = (old.parent1, old.parent2, old.formula);
-    //         sheet.cell_meta.insert(cell_key, old);
-    //         add_children(sheet, parent1, parent2, formula, row, col);
-    //     } else {
-    //         sheet.cell_meta.remove(&cell_key);
-    //     }
-
-    //     return CommandStatus::CmdCircularRef;
-    // }
     
     // Add dependencies
     if left_is_cell && right_is_cell {
@@ -390,22 +349,6 @@ pub fn evaluate_formula(
         meta.parent1 = parent1;
         meta.parent2 = parent2;
         meta.formula = formula_type;
-
-        // // Check for circular reference
-        // if detect_cycle(sheet, parent1, parent2, formula_type, cell_key) {
-        //     // If a cycle is detected, restore the old parents and formula
-        //     if let Some(old) = old_meta {
-        //         let parent1 = old.parent1;
-        //         let parent2 = old.parent2;
-        //         let formula = old.formula;
-        //         sheet.cell_meta.insert(cell_key, old);
-        //         add_children(sheet, parent1, parent2, formula, row, col);
-        //     } else {
-        //         sheet.cell_meta.remove(&cell_key);
-        //     }
-
-        //     return CommandStatus::CmdCircularRef;
-        // }
 
         // Add children and evaluate the appropriate function
         add_children(sheet, parent1, parent2, formula_type, row, col);
