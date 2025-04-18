@@ -16,37 +16,37 @@ use spreadsheet::CommandStatus;
 use evaluator::handle_command;
 
 // Updated memory usage structure
-struct MemoryUsage {
-    physical_mem: u64,
-}
+// struct MemoryUsage {
+//     physical_mem: u64,
+// }
 
 // Improved cross-platform memory usage function using sys-info crate
-fn memory_stats() -> Option<MemoryUsage> {
-    match sys_info::mem_info() {
-        Ok(mem_info) => {
-            // Calculate memory used by the process
-            // On most systems this returns the system-wide memory usage
-            // For process-specific usage, we use a percentage estimate
+// fn memory_stats() -> Option<MemoryUsage> {
+//     match sys_info::mem_info() {
+//         Ok(mem_info) => {
+//             // Calculate memory used by the process
+//             // On most systems this returns the system-wide memory usage
+//             // For process-specific usage, we use a percentage estimate
             
-            // Calculate used memory in bytes
-            let used_mem = (mem_info.total - mem_info.free) * 1024; // Convert KB to bytes
+//             // Calculate used memory in bytes
+//             let used_mem = (mem_info.total - mem_info.free) * 1024; // Convert KB to bytes
             
-            // Approximate the process memory as a fraction of total used memory
-            // This is a rough estimate - actual process memory would require platform-specific code
-            let process_estimate = used_mem / 50; // Assuming our process uses ~2% of used memory
+//             // Approximate the process memory as a fraction of total used memory
+//             // This is a rough estimate - actual process memory would require platform-specific code
+//             let process_estimate = used_mem / 50; // Assuming our process uses ~2% of used memory
             
-            Some(MemoryUsage {
-                physical_mem: process_estimate,
-            })
-        },
-        Err(_) => {
-            // Fallback if memory info retrieval fails
-            Some(MemoryUsage {
-                physical_mem: 10 * 1024 * 1024, // 10 MB placeholder
-            })
-        }
-    }
-}
+//             Some(MemoryUsage {
+//                 physical_mem: process_estimate,
+//             })
+//         },
+//         Err(_) => {
+//             // Fallback if memory info retrieval fails
+//             Some(MemoryUsage {
+//                 physical_mem: 10 * 1024 * 1024, // 10 MB placeholder
+//             })
+//         }
+//     }
+// }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
