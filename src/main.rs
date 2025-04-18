@@ -4,6 +4,7 @@ mod evaluator;
 mod formula;
 mod graph;
 mod reevaluate_topo;
+mod visualize_cells;
 use std::env;
 use std::io::{self, Write};
 use std::process;
