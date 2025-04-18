@@ -133,11 +133,10 @@ pub fn toposort_reval_detect_cycle(sheet: &mut Spreadsheet, row: i16, col: i16, 
                 }
             }
         }
-        let children = sheet.get_range_children(cell_key);
-        // Range-based children
-        for child_key in children {
-            if !fully_visited.contains(&child_key) {
-                stack.push((child_key, false));
+
+        for range_child in &sheet.range_children {
+            if !fully_visited.contains(&range_child.child_key) && sheet.is_cell_in_range(cell_key, range_child.start_key, range_child.end_key) {
+                stack.push((range_child.child_key, false));
             }
         }
     }
