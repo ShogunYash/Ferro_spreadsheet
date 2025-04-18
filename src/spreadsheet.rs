@@ -54,16 +54,6 @@ impl CellMeta {
     }
 }
 
-impl Default for CellMeta {
-    fn default() -> Self {
-        CellMeta {
-            formula: -1,
-            parent1: -1,
-            parent2: -1,
-        }
-    }
-}
-
 // Spreadsheet structure with HashMap of boxed HashSets for children
 pub struct Spreadsheet {
     pub grid: Vec<CellValue>,                                // Vector of CellValues (contiguous in memory)
@@ -88,9 +78,6 @@ impl Spreadsheet {
         // Create empty cells - initialize with Integer(0)
         let total = rows as usize * cols as usize;
         let grid = vec![CellValue::Integer(0); total];
-        
-        // Create an empty HashMap for children - HashSets will be created only when needed
-        // let children = HashMap::with_capacity(total / 10);  // Preallocate with estimated size
                 
         Some(Spreadsheet {
             grid,
@@ -128,13 +115,6 @@ impl Spreadsheet {
         self.cell_meta.entry(key).or_insert_with(CellMeta::new)
     }
 
-
-    pub fn get_cell_meta_mut(&mut self, row: i16, col: i16) -> &mut CellMeta {
-        let key = self.get_key(row, col);
-        self.cell_meta.entry(key).or_insert(CellMeta::default())
-    }
-
-    
     pub fn get_column_name(&self, mut col: i16) -> String {
         // Pre-calculate the length needed for the string
         let mut temp_col = col + 1; // Convert from 0-based to 1-based
@@ -216,17 +196,6 @@ impl Spreadsheet {
         cell_col >= start_col && cell_col <= end_col
     }
     
-    // Get all range-based children for a cell
-    pub fn get_range_children(&self, cell_key: i32) -> Vec<i32> {
-        let mut result = Vec::new();
-        for range in &self.range_children {
-            if self.is_cell_in_range(cell_key, range.start_key, range.end_key) {
-                result.push(range.child_key);
-            }
-        }
-        result
-    }
-
     // Add a child to a cell's dependents (modified for HashMap of boxed HashSets)
     pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
         self.children
@@ -660,18 +629,6 @@ mod tests {
         assert!(sheet.get_cell_children(parent).unwrap().contains(&child));
         sheet.remove_child(parent, child);
         assert!(sheet.get_cell_children(parent).is_none());
-    }
-
-    #[test]
-    fn test_add_remove_range_child() {
-        let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        let parent1 = sheet.get_key(0, 0);
-        let parent2 = sheet.get_key(1, 1);
-        let child = sheet.get_key(2, 2);
-        sheet.add_range_child(parent1, parent2, child);
-        assert!(sheet.get_range_children(parent1).contains(&child));
-        sheet.remove_range_child(child);
-        assert!(!sheet.get_range_children(parent1).contains(&child));
     }
 
     #[test]
