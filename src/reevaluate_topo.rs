@@ -185,3 +185,110 @@ pub fn toposort_reval_detect_cycle(sheet: &mut Spreadsheet, row: i16, col: i16, 
     
     false // No cycle detected
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cell::CellValue;
+    use crate::evaluator::set_cell_value;
+    use crate::spreadsheet::{CommandStatus, Spreadsheet};
+
+    fn create_test_spreadsheet(rows: i16, cols: i16) -> Spreadsheet {
+        Spreadsheet::create(rows, cols).unwrap()
+    }
+
+    #[test]
+    fn test_sleep_fn_positive() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        sleep_fn(&mut sheet, 0, 0, 5, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(5));
+        assert_eq!(sleep_time, 5.0);
+    }
+
+    #[test]
+    fn test_sleep_fn_negative() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        sleep_fn(&mut sheet, 0, 0, -5, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(-5));
+        assert_eq!(sleep_time, 0.0);
+    }
+
+    // #[test]
+    // fn test_reevaluate_formula_arithmetic() {
+    //     let mut sheet = create_test_spreadsheet(5, 5);
+    //     *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
+    //     *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);
+    //     {
+    //         let meta = sheet.get_cell_meta_mut(1, 1);
+    //         meta.parent1 = sheet.get_key(0, 0);
+    //         meta.parent2 = sheet.get_key(0, 1);
+    //         meta.formula = 10; // Addition
+    //     }
+    //     let mut sleep_time = 0.0;
+    //     reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+    //     assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5));
+    // }
+
+    // #[test]
+    // fn test_reevaluate_formula_arithmetic_div_zero() {
+    //     let mut sheet = create_test_spreadsheet(5, 5);
+    //     *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
+    //     *sheet.get_mut_cell(0, 1) = CellValue::Integer(0);
+    //     let meta = sheet.get_cell_meta(1, 1);
+    //     meta.parent1 = sheet.get_key(0, 0);
+    //     meta.parent2 = sheet.get_key(0, 1);
+    //     meta.formula = 30; // Division
+    //     let mut sleep_time = 0.0;
+    //     reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+    //     assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
+    // }
+
+    // #[test]
+    // fn test_reevaluate_formula_error() {
+    //     let mut sheet = create_test_spreadsheet(5, 5);
+    //     *sheet.get_mut_cell(0, 0) = CellValue::Error;
+    //     let meta = sheet.get_cell_meta(1, 1);
+    //     meta.parent1 = sheet.get_key(0, 0);
+    //     meta.parent2 = sheet.get_key(0, 1);
+    //     meta.formula = 10; // Addition
+    //     let mut sleep_time = 0.0;
+    //     reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+    //     assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
+    // }
+
+    // #[test]
+    // fn test_reevaluate_formula_sum() {
+    //     let mut sheet = create_test_spreadsheet(5, 5);
+    //     *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+    //     *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);
+    //     let meta = sheet.get_cell_meta(1, 1);
+    //     meta.parent1 = sheet.get_key(0, 0);
+    //     meta.parent2 = sheet.get_key(0, 1);
+    //     meta.formula = 5; // SUM
+    //     let mut sleep_time = 0.0;
+    //     reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+    //     assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3));
+    // }
+
+    #[test]
+    fn test_cycle_prevention() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        let mut sleep_time = 0.0;
+        assert_eq!(set_cell_value(&mut sheet, 1, 1, "A1", &mut sleep_time), CommandStatus::CmdOk);
+        assert_eq!(set_cell_value(&mut sheet, 0, 0, "B2", &mut sleep_time), CommandStatus::CmdCircularRef);
+        assert!(!toposort_reval_detect_cycle(&mut sheet, 0, 0, &mut sleep_time));
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(1)); // A1 unchanged
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(1)); // B2 still references A1
+    }
+
+    #[test]
+    fn test_toposort_reval_no_cycle() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        let mut sleep_time = 0.0;
+        set_cell_value(&mut sheet, 1, 1, "A1", &mut sleep_time);
+        assert!(!toposort_reval_detect_cycle(&mut sheet, 1, 1, &mut sleep_time));
+    }
+}
