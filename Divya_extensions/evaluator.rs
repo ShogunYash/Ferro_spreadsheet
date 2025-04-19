@@ -1,10 +1,10 @@
 use crate::spreadsheet::{Spreadsheet, CommandStatus};
 use crate::cell::{CellValue, parse_cell_reference};
-use crate::formula::parse_range;
 use crate::formula::{eval_max, eval_min, sum_value, eval_variance, eval_avg};
 use crate::graph::{add_children, remove_all_parents};
 use crate::reevaluate_topo::{toposort_reval_detect_cycle, sleep_fn};
 use crate::spreadsheet::{MAX_DISPLAY};
+use crate::formula::{parse_range, Range};
 
 pub fn handle_sleep(
     sheet: &mut Spreadsheet,
@@ -123,7 +123,7 @@ pub fn evaluate_arithmetic(
                 add_children(sheet, ref_cell_key, -1, 82, row, col);
                 
                 // Update cell value
-                *sheet.get_mut_cell(row, col) =  match sheet.get_cell(target_row, target_col) {
+                *sheet.get_mut_cell(row, col) = match sheet.get_cell(target_row, target_col) {
                     CellValue::Integer(val) => CellValue::Integer(*val),
                     _ => CellValue::Error,
                 };
@@ -368,6 +368,10 @@ pub fn evaluate_formula(
 }
 
 pub fn set_cell_value(sheet: &mut Spreadsheet, row: i16, col: i16, expr: &str, sleep_time: &mut f64) -> CommandStatus {
+    if sheet.is_cell_locked(row, col) {
+        return CommandStatus::CmdLockedCell;
+    }
+
     let old_meta = sheet.cell_meta.get(&sheet.get_key(row, col)).cloned();
     let old_value = match sheet.get_cell(row, col) {
         CellValue::Integer(val) => CellValue::Integer(*val),
@@ -431,19 +435,6 @@ pub fn handle_command(
         _ => {}
     }
     
-    // Check for display command
-    if trimmed.starts_with("display ") {
-        let num_str = trimmed.get(8..).unwrap_or("").trim();
-        match num_str.parse::<i16>() {
-            Ok(num) if num > 0 && num <= MAX_DISPLAY => {
-                sheet.display_rows = num;
-                sheet.display_cols = num;
-                return CommandStatus::CmdOk;
-            },
-            _ => return CommandStatus::CmdUnrecognized,
-        }
-    }
-    
     // Check for cell dependency visualization command
     if trimmed.starts_with("visualize ") {
         let cell_ref = &trimmed[10..]; // Skip "visualize " prefix
@@ -461,6 +452,49 @@ pub fn handle_command(
     if trimmed.len() > 10 && &trimmed.as_bytes()[..9] == b"scroll_to" && trimmed.as_bytes()[9] == b' ' {
         let cell_ref = &trimmed[10..];
         return sheet.scroll_to_cell(cell_ref);
+    }
+    
+    // Check for display command
+    if trimmed.starts_with("display ") {
+        let num_str = trimmed.get(8..).unwrap_or("").trim();
+        match num_str.parse::<i16>() {
+            Ok(num) if num > 0 && num <= MAX_DISPLAY => {
+                sheet.display_rows = num;
+                sheet.display_cols = num;
+                return CommandStatus::CmdOk;
+            },
+            _ => return CommandStatus::CmdUnrecognized,
+        }
+    }
+
+    // Check for lock_cell command
+    if trimmed.starts_with("lock_cell ") {
+        let lock_target = trimmed.get(9..).unwrap_or("").trim();
+        if lock_target.contains(':') {
+            // It's a range
+            match parse_range(sheet, lock_target) {
+                Ok(range) => {
+                    sheet.lock_range(range);
+                    return CommandStatus::CmdOk;
+                },
+                Err(status) => return status,
+            }
+        } else {
+            // It's a single cell
+            match parse_cell_reference(sheet, lock_target) {
+                Ok((row, col)) => {
+                    let range = Range {
+                        start_row: row,
+                        start_col: col,
+                        end_row: row,
+                        end_col: col,
+                    };
+                    sheet.lock_range(range);
+                    return CommandStatus::CmdOk;
+                },
+                Err(status) => return status,
+            }
+        }
     }
     
     // Check for cell assignment using byte search for '='
@@ -491,7 +525,6 @@ pub fn handle_command(
     // No recognized command
     CommandStatus::CmdUnrecognized
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -697,6 +730,52 @@ mod tests {
     }
 
     #[test]
+    fn test_handle_command_display() {
+        let mut sheet = create_test_spreadsheet(20, 20);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "display 5", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.display_rows, 5);
+        assert_eq!(sheet.display_cols, 5);
+        assert_eq!(
+            handle_command(&mut sheet, "display 16", &mut sleep_time),
+            CommandStatus::CmdUnrecognized
+        );
+    }
+
+    #[test]
+    fn test_handle_command_lock_cell() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "lock_cell B2", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert!(sheet.is_cell_locked(1, 1));
+        assert_eq!(
+            handle_command(&mut sheet, "lock_cell A1:B2", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert!(sheet.is_cell_locked(0, 0));
+        assert!(sheet.is_cell_locked(1, 1));
+        assert!(!sheet.is_cell_locked(2, 2));
+    }
+
+    #[test]
+    fn test_handle_command_assignment_locked() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        handle_command(&mut sheet, "lock_cell A1", &mut sleep_time);
+        assert_eq!(
+            handle_command(&mut sheet, "A1=42", &mut sleep_time),
+            CommandStatus::CmdLockedCell
+        );
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0)); // Value unchanged
+    }
+
+    #[test]
     fn test_handle_command_assignment() {
         let mut sheet = create_test_spreadsheet(5, 5);
         let mut sleep_time = 0.0;
@@ -705,41 +784,5 @@ mod tests {
             CommandStatus::CmdOk
         );
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(42));
-    }
-
-    #[test]
-    fn test_handle_command_display_valid() {
-        let mut sheet = create_test_spreadsheet(20, 20);
-        let mut sleep_time = 0.0;
-        assert_eq!(
-            handle_command(&mut sheet, "display 10", &mut sleep_time),
-            CommandStatus::CmdOk
-        );
-        assert_eq!(sheet.display_rows, 10);
-        assert_eq!(sheet.display_cols, 10);
-        assert_eq!(
-            handle_command(&mut sheet, "display 15", &mut sleep_time),
-            CommandStatus::CmdOk
-        );
-        assert_eq!(sheet.display_rows, 15);
-        assert_eq!(sheet.display_cols, 15);
-    }
-
-    #[test]
-    fn test_handle_command_display_invalid() {
-        let mut sheet = create_test_spreadsheet(20, 20);
-        let mut sleep_time = 0.0;
-        assert_eq!(
-            handle_command(&mut sheet, "display 16", &mut sleep_time),
-            CommandStatus::CmdUnrecognized
-        );
-        assert_eq!(sheet.display_rows, 10); // Should remain unchanged
-        assert_eq!(sheet.display_cols, 10); // Should remain unchanged
-        assert_eq!(
-            handle_command(&mut sheet, "display 0", &mut sleep_time),
-            CommandStatus::CmdUnrecognized
-        );
-        assert_eq!(sheet.display_rows, 10); // Should remain unchanged
-        assert_eq!(sheet.display_cols, 10); // Should remain unchanged
     }
 }

@@ -4,6 +4,7 @@ mod evaluator;
 mod formula;
 mod graph;
 mod reevaluate_topo;
+mod visualize_cells;
 use std::env;
 use std::io::{self, Write};
 use std::process;
@@ -125,6 +126,7 @@ fn main() {
             CommandStatus::CmdUnrecognized => "unrecognized_cmd",
             CommandStatus::CmdCircularRef => "circular_ref",
             CommandStatus::CmdInvalidCell => "invalid_cell",
+            CommandStatus::CmdLockedCell => "locked_cell",
         };
     }
 }
