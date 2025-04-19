@@ -1,0 +1,36 @@
+Rust lab rubrics
+Dear students,
+
+We are sharing the rubrics for the Rust lab (25 marks). We tried to make rubrics objective wherever possible.
+
+Base program (9)
+
+This will be evaluated by the same autograder as the C lab one. We are currently making some changes to the autograder to give you more marks in the C lab. We will use the same autograder in the same setup. We will run the exact same tests (with just renaming of cells) in the Rust lab.
+Good software development practices (6)
+
+Clippy, rustfmt (1.5).
+1 marks for 0 clippy problems.
+0.5 for no problems found by rustfmt --check
+Unit test coverage (3).
+3 marks over 80%.
+2 marks over 60%.
+1 mark over 40%.
+Continuous integration and git usage (1.5)
+Documentation (5):
+
+Explains design and software architecture (3)
+Why proposed extension could not be implemented?
+Could we implement extra extensions over and above the proposal?
+Primary data structures
+Interfaces between software modules
+Approaches for encapsulation
+Justify why this is a good design
+Whether we had to modify design
+Code documentation using rustdoc (2).
+Good coverage, understandable documentation.
+Extensions (5)
+
+Robustness while using extensions (1.5)
+User interface design and usability (1.5)
+Presentation (2)
+Thanks. Hope this helps!
