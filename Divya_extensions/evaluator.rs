@@ -4,7 +4,7 @@ use crate::formula::parse_range;
 use crate::formula::{eval_max, eval_min, sum_value, eval_variance, eval_avg};
 use crate::graph::{add_children, remove_all_parents};
 use crate::reevaluate_topo::{toposort_reval_detect_cycle, sleep_fn};
-
+use crate::spreadsheet::{MAX_DISPLAY};
 
 pub fn handle_sleep(
     sheet: &mut Spreadsheet,
@@ -431,6 +431,19 @@ pub fn handle_command(
         _ => {}
     }
     
+    // Check for display command
+    if trimmed.starts_with("display ") {
+        let num_str = trimmed.get(8..).unwrap_or("").trim();
+        match num_str.parse::<i16>() {
+            Ok(num) if num > 0 && num <= MAX_DISPLAY => {
+                sheet.display_rows = num;
+                sheet.display_cols = num;
+                return CommandStatus::CmdOk;
+            },
+            _ => return CommandStatus::CmdUnrecognized,
+        }
+    }
+    
     // Check for cell dependency visualization command
     if trimmed.starts_with("visualize ") {
         let cell_ref = &trimmed[10..]; // Skip "visualize " prefix
@@ -692,5 +705,41 @@ mod tests {
             CommandStatus::CmdOk
         );
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(42));
+    }
+
+    #[test]
+    fn test_handle_command_display_valid() {
+        let mut sheet = create_test_spreadsheet(20, 20);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "display 10", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.display_rows, 10);
+        assert_eq!(sheet.display_cols, 10);
+        assert_eq!(
+            handle_command(&mut sheet, "display 15", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.display_rows, 15);
+        assert_eq!(sheet.display_cols, 15);
+    }
+
+    #[test]
+    fn test_handle_command_display_invalid() {
+        let mut sheet = create_test_spreadsheet(20, 20);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "display 16", &mut sleep_time),
+            CommandStatus::CmdUnrecognized
+        );
+        assert_eq!(sheet.display_rows, 10); // Should remain unchanged
+        assert_eq!(sheet.display_cols, 10); // Should remain unchanged
+        assert_eq!(
+            handle_command(&mut sheet, "display 0", &mut sleep_time),
+            CommandStatus::CmdUnrecognized
+        );
+        assert_eq!(sheet.display_rows, 10); // Should remain unchanged
+        assert_eq!(sheet.display_cols, 10); // Should remain unchanged
     }
 }
