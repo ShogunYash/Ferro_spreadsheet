@@ -5,6 +5,7 @@ mod formula;
 mod graph;
 mod reevaluate_topo;
 mod visualize_cells;
+mod vim_mode;
 use std::env;
 use std::io::{self, Write};
 use std::process;
@@ -51,17 +52,27 @@ fn memory_stats() -> Option<MemoryUsage> {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 3 {
-        eprintln!("Usage: {} <rows> <columns>", args[0]);
-        process::exit(1);
+    let mut vim_mode = false;
+    let mut rows_arg_index = 1;
+    let mut cols_arg_index = 2;
+
+    if args.len() > 1 && args[1] == "--vim" {
+        vim_mode = true;
+        rows_arg_index = 2;
+        cols_arg_index = 3;
     }
     
-    let rows: i16 = args[1].parse().unwrap_or_else(|_| {
+    // else if args.len() != 3 {
+    //     eprintln!("Usage: {} <rows> <columns>", args[0]);
+    //     process::exit(1);
+    // }
+    
+    let rows: i16 = args[rows_arg_index].parse().unwrap_or_else(|_| {
         eprintln!("Invalid number for rows");
         process::exit(1);
     });
-
-    let cols: i16 = args[2].parse().unwrap_or_else(|_| {
+    
+    let cols: i16 = args[cols_arg_index].parse().unwrap_or_else(|_| {
         eprintln!("Invalid number for columns");
         process::exit(1);
     });
@@ -77,6 +88,12 @@ fn main() {
             process::exit(1);
         }
     };
+    if vim_mode{
+        vim_mode::run_editor(&mut sheet);
+    }
+    else{
+
+
     let mut command_time = start.elapsed().as_secs_f64();
     let mut last_time = command_time; // Update last_time with the command time
     
@@ -128,4 +145,5 @@ fn main() {
             CommandStatus::CmdInvalidCell => "invalid_cell",
         };
     }
+}
 }
