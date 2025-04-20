@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::cell::{CellValue, parse_cell_reference}; 
 use crate::visualize_cells;
-
+use crate::formula::Range;  // Assuming Range is defined in formula.rs
 
 // Constants
-const MAX_ROWS: i16 = 999;    // Maximum number of rows in the spreadsheet   
-const MAX_COLS: i16 = 18278;  // Maximum number of columns in the spreadsheet
+pub const MAX_ROWS: i16 = 999;    // Maximum number of rows in the spreadsheet   
+pub const MAX_COLS: i16 = 18278;  // Maximum number of columns in the spreadsheet
+pub const MAX_DISPLAY: i16 = 15;  // Maximum display size for rows and columns
 
 // Structure to represent a range-based child relationship
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -23,6 +24,7 @@ pub enum CommandStatus {
     CmdUnrecognized,
     CmdCircularRef,
     CmdInvalidCell,
+    CmdLockedCell,  // New status for locked cells
 }
 
 // Modified CellMeta to remove children (they're now stored separately)
@@ -54,6 +56,9 @@ pub struct Spreadsheet {
     pub viewport_row: i16,
     pub viewport_col: i16,
     pub output_enabled: bool,
+    pub display_rows: i16,  // Custom display rows
+    pub display_cols: i16,  // Custom display columns
+    pub locked_ranges: Vec<Range>,  // New field to store locked ranges
 }
 
 impl Spreadsheet {
@@ -78,6 +83,9 @@ impl Spreadsheet {
             viewport_row: 0,
             viewport_col: 0,
             output_enabled: true,
+            display_rows: 10,  // Default display size
+            display_cols: 10,  // Default display size
+            locked_ranges: Vec::new(),  // Initialize locked ranges
         })
     }
 
@@ -142,7 +150,7 @@ impl Spreadsheet {
         let bytes = name.as_bytes();
         let mut index: i16 = 0;
         for &b in bytes {
-                        index = index * 26 + ((b - b'A') as i16 + 1);
+            index = index * 26 + ((b - b'A') as i16 + 1);
         }
         index - 1 // Convert from 1-based to 0-based
     }
@@ -217,8 +225,8 @@ impl Spreadsheet {
         
         let start_row = self.viewport_row;
         let start_col = self.viewport_col;
-        let display_row = min(self.rows - start_row, 10); // Display only a portion of the spreadsheet
-        let display_col = min(self.cols - start_col, 10);
+        let display_row = min(self.rows - start_row, self.display_rows); // Use customizable display size
+        let display_col = min(self.cols - start_col, self.display_cols); // Use customizable display size
         
         // Print column headers
         print!("     ");
@@ -296,10 +304,25 @@ impl Spreadsheet {
     
     pub fn visualize_cell_relationships(&self, row: i16, col: i16) -> CommandStatus {
         // Check if the cell is valid
-        visualize_cells::visualize_cell_relationships(self,row, col)
+        visualize_cells::visualize_cell_relationships(self, row, col)
+    }
+
+    // New method to lock a range
+    pub fn lock_range(&mut self, range: Range) {
+        self.locked_ranges.push(range);
+    }
+
+    // New method to check if a cell is locked
+    pub fn is_cell_locked(&self, row: i16, col: i16) -> bool {
+        for range in &self.locked_ranges {
+            if row >= range.start_row && row <= range.end_row &&
+               col >= range.start_col && col <= range.end_col {
+                return true;
+            }
+        }
+        false
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -438,5 +461,20 @@ mod tests {
         *sheet.get_mut_cell(1, 1) = CellValue::Error;
         sheet.output_enabled = true;
         sheet.print_spreadsheet(); // Should not panic
+    }
+
+    #[test]
+    fn test_lock_range_and_is_cell_locked() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let range = Range {
+            start_row: 0,
+            start_col: 0,
+            end_row: 1,
+            end_col: 1,
+        };
+        sheet.lock_range(range);
+        assert!(sheet.is_cell_locked(0, 0));
+        assert!(sheet.is_cell_locked(1, 1));
+        assert!(!sheet.is_cell_locked(2, 2));
     }
 }

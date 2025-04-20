@@ -5,7 +5,6 @@ mod formula;
 mod graph;
 mod reevaluate_topo;
 mod visualize_cells;
-mod vim_mode;
 use std::env;
 use std::io::{self, Write};
 use std::process;
@@ -17,30 +16,52 @@ use spreadsheet::Spreadsheet;
 use spreadsheet::CommandStatus;
 use evaluator::handle_command;
 
+// Updated memory usage structure
+// struct MemoryUsage {
+//     physical_mem: u64,
+// }
+
+// Improved cross-platform memory usage function using sys-info crate
+// fn memory_stats() -> Option<MemoryUsage> {
+//     match sys_info::mem_info() {
+//         Ok(mem_info) => {
+//             // Calculate memory used by the process
+//             // On most systems this returns the system-wide memory usage
+//             // For process-specific usage, we use a percentage estimate
+            
+//             // Calculate used memory in bytes
+//             let used_mem = (mem_info.total - mem_info.free) * 1024; // Convert KB to bytes
+            
+//             // Approximate the process memory as a fraction of total used memory
+//             // This is a rough estimate - actual process memory would require platform-specific code
+//             let process_estimate = used_mem / 50; // Assuming our process uses ~2% of used memory
+            
+//             Some(MemoryUsage {
+//                 physical_mem: process_estimate,
+//             })
+//         },
+//         Err(_) => {
+//             // Fallback if memory info retrieval fails
+//             Some(MemoryUsage {
+//                 physical_mem: 10 * 1024 * 1024, // 10 MB placeholder
+//             })
+//         }
+//     }
+// }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let mut vim_mode = false;
-    let mut rows_arg_index = 1;
-    let mut cols_arg_index = 2;
-
-    if args.len() > 1 && args[1] == "--vim" {
-        vim_mode = true;
-        rows_arg_index = 2;
-        cols_arg_index = 3;
+    if args.len() != 3 {
+        eprintln!("Usage: {} <rows> <columns>", args[0]);
+        process::exit(1);
     }
     
-    // else if args.len() != 3 {
-    //     eprintln!("Usage: {} <rows> <columns>", args[0]);
-    //     process::exit(1);
-    // }
-    
-    let rows: i16 = args[rows_arg_index].parse().unwrap_or_else(|_| {
+    let rows: i16 = args[1].parse().unwrap_or_else(|_| {
         eprintln!("Invalid number for rows");
         process::exit(1);
     });
-    
-    let cols: i16 = args[cols_arg_index].parse().unwrap_or_else(|_| {
+
+    let cols: i16 = args[2].parse().unwrap_or_else(|_| {
         eprintln!("Invalid number for columns");
         process::exit(1);
     });
@@ -56,21 +77,19 @@ fn main() {
             process::exit(1);
         }
     };
-    if vim_mode{
-        vim_mode::run_editor(&mut sheet);
-    }
-    else{
-
-
     let mut command_time = start.elapsed().as_secs_f64();
     let mut last_time = command_time; // Update last_time with the command time
     
+    // println!("Spreadsheet created in {:.2} seconds.", command_time);
     let mut last_status = "ok"; // Placeholder for last status
     let mut input = String::with_capacity(128);
     
     // Main loop for command input
     loop {
         sheet.print_spreadsheet();
+        // if let Some(usage) = memory_stats() {
+        //     print!("[{:.1}s, {:.1}MB] ({}) > ", last_time, usage.physical_mem as f64 / (1024.0 *1024.0), last_status);
+        // }
         print!("[{:.1}s ({}) > ", last_time, last_status);
         io::stdout().flush().unwrap(); // Ensure the prompt is shown
     
@@ -107,7 +126,7 @@ fn main() {
             CommandStatus::CmdUnrecognized => "unrecognized_cmd",
             CommandStatus::CmdCircularRef => "circular_ref",
             CommandStatus::CmdInvalidCell => "invalid_cell",
+            CommandStatus::CmdLockedCell => "locked_cell",
         };
     }
-}
 }

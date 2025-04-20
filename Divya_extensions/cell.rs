@@ -1,6 +1,6 @@
 use crate::spreadsheet::{Spreadsheet, CommandStatus}; 
 
-/// Cell value representation
+// Cell value representation
 #[derive(Debug, Clone, PartialEq)]
 pub enum CellValue {
     Integer(i32),
@@ -13,7 +13,7 @@ pub fn parse_cell_reference(sheet: &Spreadsheet, cell_ref: &str) -> Result<(i16,
         return Err(CommandStatus::CmdUnrecognized);
     }
     
-    /// Find column/row split point in one pass
+    // Find column/row split point in one pass
     let mut split_idx = 0;
     let mut col_length = 0;
     

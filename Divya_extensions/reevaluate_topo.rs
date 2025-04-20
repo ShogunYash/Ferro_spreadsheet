@@ -115,10 +115,6 @@ pub fn reevaluate_formula(sheet: &mut Spreadsheet, row: i16, col: i16, sleep_val
     }
 }
 
-// rustdoc this function
-/// Performs a topological sort on the spreadsheet to reevaluate cells in the correct order.
-/// This function also detects cycles in the dependency graph. If a cycle is detected, it returns true.
-
 pub fn toposort_reval_detect_cycle(sheet: &mut Spreadsheet, row: i16, col: i16, sleep_val: &mut f64) -> bool {  
     let cell_key = sheet.get_key(row, col); 
     // These collections will be used for the topological sort and cycle detection
@@ -157,7 +153,7 @@ pub fn toposort_reval_detect_cycle(sheet: &mut Spreadsheet, row: i16, col: i16, 
             }
             fully_visited.insert(current);
         } else {
-           // If we haven't expanded this node yet:
+            // If we haven't expanded this node yet:
             if in_current_path.contains(&current) {
                 // Cycle detected
                 // Debugging output
