@@ -4,26 +4,24 @@ mod commands;
 
 use crate::spreadsheet::{Spreadsheet, CommandStatus};
 use std::io::{self, Write};
-use std::process;
-use std::time::{Duration, Instant};
 
-pub fn run_editor(sheet: &mut Spreadsheet) {
+pub fn run_editor(sheet: &mut Spreadsheet, filename: Option<String>) {
     // Initialize vim mode editor state
     let mut editor_state = editor::EditorState::new();
-    let mut sleep_time = 0.0;
-    let mut last_time = 0.0;
-    let mut last_status = "ok";
+    
+    // If a filename was provided, load it and set as save file
+    if let Some(file) = filename {
+        editor_state.save_file = Some(file.clone());
+        let _ = commands::load_spreadsheet(sheet, &file);
+    }
 
     // Main editor loop
     loop {
         // Render the spreadsheet with cursor
         editor_state.render_spreadsheet(sheet);
         
-        // Show status line with mode indication
-        print!("[{:.1}s] ({}) {} > ", 
-               last_time, 
-               last_status, 
-               editor_state.mode_display());
+        // Show command prompt
+        print!("{} > ", editor_state.mode_display());
         io::stdout().flush().unwrap();
 
         // Get user input
@@ -39,31 +37,15 @@ pub fn run_editor(sheet: &mut Spreadsheet) {
             break;
         }
         
-        // Process the command with timing
-        let start = Instant::now();
-        let status = commands::handle_vim_command(sheet, trimmed, &mut editor_state, &mut sleep_time);
-        let command_time = start.elapsed().as_secs_f64();
+        // Process the command
+        let status = commands::handle_vim_command(sheet, trimmed, &mut editor_state);
         
-        // Handle sleep time as in the original code
-        if sleep_time <= command_time {
-            sleep_time = 0.0;
-        } else {
-            sleep_time -= command_time;
+        // Handle special case for Esc key in terminal
+        if trimmed == "\x1b" && editor_state.mode == editor::EditorMode::Insert {
+            editor_state.mode = editor::EditorMode::Normal;
         }
-        last_time = command_time + sleep_time;
-        if sleep_time > 0.0 {
-            std::thread::sleep(Duration::from_secs_f64(sleep_time));
-        }
-        sleep_time = 0.0;
         
-        // Update status and check for quit command
-        last_status = match status {
-            CommandStatus::CmdOk => "ok",
-            CommandStatus::CmdUnrecognized => "unrecognized_cmd",
-            CommandStatus::CmdCircularRef => "circular_ref",
-            CommandStatus::CmdInvalidCell => "invalid_cell",
-        };
-        
+        // Check for quit command
         if editor_state.should_quit {
             break;
         }

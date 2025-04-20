@@ -1,5 +1,8 @@
 // vim_mode/editor.rs
-use crate::spreadsheet::Spreadsheet;
+use crate::spreadsheet::{Spreadsheet, CommandStatus};
+use crate::cell::CellValue;
+use std::io::{self, Write};
+use crate::evaluator::{handle_command};
 
 // Define editor modes
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -13,20 +16,71 @@ pub struct EditorState {
     pub mode: EditorMode,
     pub cursor_row: i16,
     pub cursor_col: i16,
-    pub clipboard: Option<(i16, i16, String)>, // (row, col, value)
+    pub clipboard: Option<(i16, i16, CellValue, String)>, // (row, col, value, formula)
     pub should_quit: bool,
+    pub save_file: Option<String>,
+    // Add command history
+    pub command_history: Vec<String>,
+    pub history_position: usize,
+    pub current_input: String,
 }
 
 impl EditorState {
     pub fn new() -> Self {
         EditorState {
             mode: EditorMode::Normal,
-            cursor_row: 0,  // Start at row 0 (first row)
-            cursor_col: 0,  // Start at col 0 (first column)
+            cursor_row: 0,
+            cursor_col: 0,
             clipboard: None,
             should_quit: false,
+            save_file: None,
+            command_history: Vec::new(),
+            history_position: 0,
+            current_input: String::new(),
         }
     }
+    
+
+    
+    // Add these methods to handle command history
+    pub fn add_to_history(&mut self, command: &str) {
+        // Don't add empty commands or duplicates of the most recent command
+        if command.trim().is_empty() || (self.command_history.last().map_or(false, |last| last == command)) {
+            return;
+        }
+        
+        self.command_history.push(command.to_string());
+        self.history_position = self.command_history.len();
+    }
+    
+    pub fn navigate_history(&mut self, direction: &str) -> String {
+        // If navigating history for the first time, save current input
+        if self.history_position == self.command_history.len() && direction == "up" {
+            self.current_input = String::new(); // Save whatever might be in the current input
+        }
+        
+        match direction {
+            "up" => {
+                if self.history_position > 0 {
+                    self.history_position -= 1;
+                    self.command_history.get(self.history_position).unwrap_or(&String::new()).clone()
+                } else {
+                    self.command_history.get(0).unwrap_or(&String::new()).clone()
+                }
+            },
+            "down" => {
+                if self.history_position < self.command_history.len() - 1 {
+                    self.history_position += 1;
+                    self.command_history.get(self.history_position).unwrap_or(&String::new()).clone()
+                } else {
+                    self.history_position = self.command_history.len();
+                    self.current_input.clone()
+                }
+            },
+            _ => String::new()
+        }
+    }
+
     
     pub fn mode_display(&self) -> &'static str {
         match self.mode {
@@ -36,47 +90,130 @@ impl EditorState {
     }
     
     // Move cursor in the specified direction
-    pub fn move_cursor(&mut self, direction: char, sheet: &Spreadsheet) {
+    pub fn move_cursor(&mut self, direction: char, sheet: &mut Spreadsheet) {
         match direction {
             'h' => if self.cursor_col > 0 { self.cursor_col -= 1 },
             'j' => if self.cursor_row < sheet.rows - 1 { self.cursor_row += 1 },
-            'u' => if self.cursor_row > 0 { self.cursor_row -= 1 },
+            'k' => if self.cursor_row > 0 { self.cursor_row -= 1 },  // Fixed 'k' from 'u'
             'l' => if self.cursor_col < sheet.cols - 1 { self.cursor_col += 1 },
             _ => {}
         }
         
-        // Make sure cursor is within viewport boundaries
-        self.ensure_viewport_contains_cursor(sheet);
+        // Ensure viewport contains cursor
+        self.adjust_viewport(sheet);
     }
     
-    // Adjust spreadsheet viewport if needed to show cursor
-    fn ensure_viewport_contains_cursor(&self, sheet: &Spreadsheet) {
-        // This is just a placeholder - the actual implementation would
-        // depend on how your spreadsheet viewport is managed
-        // If the spreadsheet already manages its own viewport based on
-        // user commands, you might not need to modify it here
+    // Adjust spreadsheet viewport to contain cursor
+    pub fn adjust_viewport(&self, sheet: &mut Spreadsheet) {
+        const VIEWPORT_SIZE: i16 = 10;
+        
+        // Adjust viewport row if cursor is outside
+        if self.cursor_row < sheet.viewport_row {
+            sheet.viewport_row = self.cursor_row;
+        } else if self.cursor_row >= sheet.viewport_row + VIEWPORT_SIZE {
+            sheet.viewport_row = self.cursor_row - VIEWPORT_SIZE + 1;
+            if sheet.viewport_row < 0 {
+                sheet.viewport_row = 0;
+            }
+        }
+        
+        // Adjust viewport column if cursor is outside
+        if self.cursor_col < sheet.viewport_col {
+            sheet.viewport_col = self.cursor_col;
+        } else if self.cursor_col >= sheet.viewport_col + VIEWPORT_SIZE {
+            sheet.viewport_col = self.cursor_col - VIEWPORT_SIZE + 1;
+            if sheet.viewport_col < 0 {
+                sheet.viewport_col = 0;
+            }
+        }
     }
     
     // Custom rendering function for vim mode
     pub fn render_spreadsheet(&self, sheet: &Spreadsheet) {
         // Clear screen
         print!("\x1B[2J\x1B[1;1H");
+
+        // Calculate visible area
+        let start_row = sheet.viewport_row;
+        let start_col = sheet.viewport_col;
+        let end_row = std::cmp::min(start_row + 10, sheet.rows);
+        let end_col = std::cmp::min(start_col + 10, sheet.cols);
+
+        // Print column headers only once
+        print!("     ");
+        for col in start_col..end_col {
+            print!("{:<8} ", sheet.get_column_name(col));
+        }
+        println!();
+
+        // Print rows with data
+        for row in start_row..end_row {
+            print!("{:<4} ", row + 1); // Show 1-based row numbers
+
+            for col in start_col..end_col {
+                let cell_value = sheet.get_cell(row, col);
+
+                // Highlight the cell under the cursor
+                if row == self.cursor_row && col == self.cursor_col {
+                    print!("\x1B[7m"); // Invert colors
+                    match cell_value {
+                        CellValue::Integer(value) => print!("{:<8}", value),
+                        CellValue::Error => print!("{:<8}", "ERR"),
+                    }
+                    print!("\x1B[0m "); // Reset colors
+                } else {
+                    match cell_value {
+                        CellValue::Integer(value) => print!("{:<8} ", value),
+                        CellValue::Error => print!("{:<8} ", "ERR"),
+                    }
+                }
+            }
+            println!();
+        }
+
+        // Display status bar
+        let col_letter = sheet.get_column_name(self.cursor_col);
+        let cell_ref = format!("{}{}", col_letter, self.cursor_row + 1);
         
-        // Let the spreadsheet render itself
-        // We'll rely on the existing print_spreadsheet functionality,
-        // but might extend it in the future to show cursor position
-        sheet.print_spreadsheet();
+        // Get formula for current cell (if exists)
+        let cell_key = sheet.get_key(self.cursor_row, self.cursor_col);
+        let formula_str = if let Some(meta) = sheet.cell_meta.get(&cell_key) {
+            if meta.formula >= 0 {
+                // In a real implementation, you would fetch the formula string
+                // This is a placeholder
+                "Formula".to_string()
+            } else {
+                "".to_string()
+            }
+        } else {
+            "".to_string()
+        };
         
-        // Display current cell info
-        let col_letter = (b'A' + self.cursor_col as u8) as char;
-        println!("\nCursor at: {}{}", col_letter, self.cursor_row + 1);
+        println!("\nCursor at: {} - {}", cell_ref, formula_str);
         
-        // Additional status info can be added here
+        // Display mode
+        println!("Mode: {} | Use hjkl to navigate, i to insert, Esc to exit insert mode", 
+                 self.mode_display());
+                 
+        // If clipboard has content, show it
+        if let Some((_, _, value, _)) = &self.clipboard {
+            println!("Clipboard: {:?}", value);
+        }
+        
+        io::stdout().flush().unwrap();
     }
-    
+
+    // Set the value of the cell at the cursor
+    pub fn set_cursor_cell_value(&self, sheet: &mut Spreadsheet, value: &str) -> CommandStatus {
+        let cell_ref = self.cursor_to_cell_ref(sheet);
+        let command = format!("{}={}", cell_ref, value);
+        let mut sleep_time = 0.0;
+        crate::evaluator::handle_command(sheet, &command, &mut sleep_time)
+    }
+
     // Convert cursor position to cell reference string (e.g., "A1")
-    pub fn cursor_to_cell_ref(&self) -> String {
-        let col_letter = (b'A' + self.cursor_col as u8) as char;
+    pub fn cursor_to_cell_ref(&self, sheet: &Spreadsheet) -> String {
+        let col_letter = sheet.get_column_name(self.cursor_col);
         format!("{}{}", col_letter, self.cursor_row + 1)
     }
 }

@@ -16,16 +16,18 @@ use std::time::{Duration, Instant};
 use spreadsheet::Spreadsheet;
 use spreadsheet::CommandStatus;
 use evaluator::handle_command;
+const DEFAULT_FILENAME: &str = "untitled.sheet";
+
 
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let mut vim_mode = false;
+    let mut vim_mode_enabled = false;
     let mut rows_arg_index = 1;
     let mut cols_arg_index = 2;
 
     if args.len() > 1 && args[1] == "--vim" {
-        vim_mode = true;
+        vim_mode_enabled = true;
         rows_arg_index = 2;
         cols_arg_index = 3;
     }
@@ -56,8 +58,9 @@ fn main() {
             process::exit(1);
         }
     };
-    if vim_mode{
-        vim_mode::run_editor(&mut sheet);
+    if vim_mode_enabled {
+        let filename = Some(DEFAULT_FILENAME.to_string());
+        vim_mode::run_editor(&mut sheet, filename);
     }
     else{
 
