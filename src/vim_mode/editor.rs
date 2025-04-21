@@ -1,8 +1,8 @@
 // vim_mode/editor.rs
-use crate::spreadsheet::{Spreadsheet, CommandStatus};
 use crate::cell::CellValue;
+use crate::evaluator::handle_command;
+use crate::spreadsheet::{CommandStatus, Spreadsheet};
 use std::io::{self, Write};
-use crate::evaluator::{handle_command};
 
 // Define editor modes
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -39,74 +39,101 @@ impl EditorState {
             current_input: String::new(),
         }
     }
-    
 
-    
     // Add these methods to handle command history
     pub fn add_to_history(&mut self, command: &str) {
         // Don't add empty commands or duplicates of the most recent command
-        if command.trim().is_empty() || (self.command_history.last().map_or(false, |last| last == command)) {
+        if command.trim().is_empty()
+            || (self
+                .command_history
+                .last()
+                .map_or(false, |last| last == command))
+        {
             return;
         }
-        
+
         self.command_history.push(command.to_string());
         self.history_position = self.command_history.len();
     }
-    
+
     pub fn navigate_history(&mut self, direction: &str) -> String {
         // If navigating history for the first time, save current input
         if self.history_position == self.command_history.len() && direction == "up" {
             self.current_input = String::new(); // Save whatever might be in the current input
         }
-        
+
         match direction {
             "up" => {
                 if self.history_position > 0 {
                     self.history_position -= 1;
-                    self.command_history.get(self.history_position).unwrap_or(&String::new()).clone()
+                    self.command_history
+                        .get(self.history_position)
+                        .unwrap_or(&String::new())
+                        .clone()
                 } else {
-                    self.command_history.get(0).unwrap_or(&String::new()).clone()
+                    self.command_history
+                        .get(0)
+                        .unwrap_or(&String::new())
+                        .clone()
                 }
-            },
+            }
             "down" => {
                 if self.history_position < self.command_history.len() - 1 {
                     self.history_position += 1;
-                    self.command_history.get(self.history_position).unwrap_or(&String::new()).clone()
+                    self.command_history
+                        .get(self.history_position)
+                        .unwrap_or(&String::new())
+                        .clone()
                 } else {
                     self.history_position = self.command_history.len();
                     self.current_input.clone()
                 }
-            },
-            _ => String::new()
+            }
+            _ => String::new(),
         }
     }
 
-    
     pub fn mode_display(&self) -> &'static str {
         match self.mode {
             EditorMode::Normal => "NORMAL",
             EditorMode::Insert => "INSERT",
         }
     }
-    
+
     // Move cursor in the specified direction
     pub fn move_cursor(&mut self, direction: char, sheet: &mut Spreadsheet) {
         match direction {
-            'h' => if self.cursor_col > 0 { self.cursor_col -= 1 },
-            'j' => if self.cursor_row < sheet.rows - 1 { self.cursor_row += 1 },
-            'k' => if self.cursor_row > 0 { self.cursor_row -= 1 },  // Fixed 'k' from 'u'
-            'l' => if self.cursor_col < sheet.cols - 1 { self.cursor_col += 1 },
+            'h' => {
+                if self.cursor_col > 0 {
+                    self.cursor_col -= 1
+                }
+            }
+            'j' => {
+                if self.cursor_row < sheet.rows - 1 {
+                    self.cursor_row += 1
+                }
+            }
+            'k' => {
+                if self.cursor_row > 0 {
+                    self.cursor_row -= 1
+                }
+            } // Fixed 'k' from 'u'
+            'l' => {
+                if self.cursor_col < sheet.cols - 1 {
+                    self.cursor_col += 1
+                }
+            }
             _ => {}
         }
-        
+
         // Ensure viewport contains cursor
         self.adjust_viewport(sheet);
     }
-    
+
     // Adjust spreadsheet viewport to contain cursor
     pub fn adjust_viewport(&self, sheet: &mut Spreadsheet) {
         const VIEWPORT_SIZE: i16 = 10;
-        
+
         // Adjust viewport row if cursor is outside
         if self.cursor_row < sheet.viewport_row {
             sheet.viewport_row = self.cursor_row;
@@ -116,7 +143,7 @@ impl EditorState {
                 sheet.viewport_row = 0;
             }
         }
-        
+
         // Adjust viewport column if cursor is outside
         if self.cursor_col < sheet.viewport_col {
             sheet.viewport_col = self.cursor_col;
@@ -127,7 +154,7 @@ impl EditorState {
             }
         }
     }
-    
+
     // Custom rendering function for vim mode
     pub fn render_spreadsheet(&self, sheet: &Spreadsheet) {
         // Clear screen
@@ -174,7 +201,7 @@ impl EditorState {
         // Display status bar
         let col_letter = sheet.get_column_name(self.cursor_col);
         let cell_ref = format!("{}{}", col_letter, self.cursor_row + 1);
-        
+
         // Get formula for current cell (if exists)
         let cell_key = sheet.get_key(self.cursor_row, self.cursor_col);
         let formula_str = if let Some(meta) = sheet.cell_meta.get(&cell_key) {
@@ -188,18 +215,20 @@ impl EditorState {
         } else {
             "".to_string()
         };
-        
+
         println!("\nCursor at: {} - {}", cell_ref, formula_str);
-        
+
         // Display mode
-        println!("Mode: {} | Use hjkl to navigate, i to insert, Esc to exit insert mode", 
-                 self.mode_display());
-                 
+        println!(
+            "Mode: {} | Use hjkl to navigate, i to insert, Esc to exit insert mode",
+            self.mode_display()
+        );
+
         // If clipboard has content, show it
         if let Some((_, _, value, _)) = &self.clipboard {
             println!("Clipboard: {:?}", value);
         }
-        
+
         io::stdout().flush().unwrap();
     }
 

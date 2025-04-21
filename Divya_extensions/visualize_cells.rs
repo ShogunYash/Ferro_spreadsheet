@@ -1,5 +1,5 @@
-use crate::spreadsheet::{Spreadsheet, CommandStatus};
 use crate::cell::CellValue;
+use crate::spreadsheet::{CommandStatus, Spreadsheet};
 use petgraph::{
     dot::{Config, Dot},
     graph::{DiGraph, NodeIndex},
@@ -19,7 +19,7 @@ pub fn visualize_cell_relationships(
 
     // Get the cell key
     let cell_key = spreadsheet.get_key(row, col);
-    
+
     // Create a directed graph for visualization
     let mut graph = DiGraph::<String, &str>::new();
     let mut node_indices = HashMap::new();
@@ -28,10 +28,15 @@ pub fn visualize_cell_relationships(
     let get_cell_label = |key: i32| -> String {
         let (r, c) = spreadsheet.get_row_col(key);
         let col_name = spreadsheet.get_column_name(c);
-        format!("{}{} ({})", col_name, r + 1, match spreadsheet.grid[key as usize] {
-            CellValue::Integer(val) => val.to_string(),
-            CellValue::Error => "ERROR".to_string(),
-        })
+        format!(
+            "{}{} ({})",
+            col_name,
+            r + 1,
+            match spreadsheet.grid[key as usize] {
+                CellValue::Integer(val) => val.to_string(),
+                CellValue::Error => "ERROR".to_string(),
+            }
+        )
     };
 
     // Add the target cell to the graph
@@ -42,7 +47,7 @@ pub fn visualize_cell_relationships(
     // Helper function to process relationships
     fn process_relationships(
         spreadsheet: &Spreadsheet,
-        start_key: i32, 
+        start_key: i32,
         is_parent_direction: bool,
         processed: &mut HashSet<i32>,
         depth_limit: usize,
@@ -53,17 +58,12 @@ pub fn visualize_cell_relationships(
         if !processed.insert(start_key) {
             return; // Already processed this cell
         }
-        
 
         // Add appropriate relationships based on direction
         if is_parent_direction {
             // Add parents - traverse up the dependency tree
             if let Some(meta) = spreadsheet.cell_meta.get(&start_key) {
-               
-
-                for parent_key in [meta.parent1, meta.parent2].iter()
-                                .filter(|&&k| k >= 0) {
-                    
+                for parent_key in [meta.parent1, meta.parent2].iter().filter(|&&k| k >= 0) {
                     // Create parent node if it doesn't exist
                     let parent_idx = if let Some(&idx) = node_indices.get(parent_key) {
                         idx
@@ -73,22 +73,22 @@ pub fn visualize_cell_relationships(
                         node_indices.insert(*parent_key, idx);
                         idx
                     };
-                    
+
                     // Add edge from parent to child
                     let child_idx = node_indices[&start_key];
                     graph.add_edge(parent_idx, child_idx, "depends on");
-                    
+
                     // Recurse for this parent (up to the depth limit)
                     if processed.len() < depth_limit {
                         process_relationships(
                             spreadsheet,
-                            *parent_key, 
-                            true, 
-                            processed, 
+                            *parent_key,
+                            true,
+                            processed,
                             depth_limit,
                             graph,
                             node_indices,
-                            get_cell_label
+                            get_cell_label,
                         );
                     }
                 }
@@ -96,7 +96,6 @@ pub fn visualize_cell_relationships(
         } else {
             // Add children - traverse down the dependency tree
             if let Some(children) = spreadsheet.get_cell_children(start_key) {
-            
                 for &child_key in children {
                     // Create child node if it doesn't exist
                     let child_idx = if let Some(&idx) = node_indices.get(&child_key) {
@@ -107,61 +106,60 @@ pub fn visualize_cell_relationships(
                         node_indices.insert(child_key, idx);
                         idx
                     };
-                    
+
                     // Add edge from parent to child
                     let parent_idx = node_indices[&start_key];
                     graph.add_edge(parent_idx, child_idx, "used by");
-                    
+
                     // Recurse for this child (up to the depth limit)
                     if processed.len() < depth_limit {
                         process_relationships(
                             spreadsheet,
-                            child_key, 
-                            false, 
-                            processed, 
+                            child_key,
+                            false,
+                            processed,
                             depth_limit,
                             graph,
                             node_indices,
-                            get_cell_label
+                            get_cell_label,
                         );
                     }
                 }
             }
         }
-        
     }
 
     // Process parents (upward traversal)
     let mut processed = HashSet::new();
-     // Mark target cell as processed
+    // Mark target cell as processed
     process_relationships(
         spreadsheet,
-        cell_key, 
-        true, 
-        &mut processed, 
+        cell_key,
+        true,
+        &mut processed,
         20,
         &mut graph,
         &mut node_indices,
-        &get_cell_label
+        &get_cell_label,
     );
-    
+
     // Process children (downward traversal)
     let mut processed = HashSet::new();
-     // Mark target cell as processed
+    // Mark target cell as processed
     process_relationships(
         spreadsheet,
-        cell_key, 
-        false, 
-        &mut processed, 
+        cell_key,
+        false,
+        &mut processed,
         20,
         &mut graph,
         &mut node_indices,
-        &get_cell_label
+        &get_cell_label,
     );
 
     // Generate DOT format
     let dot = Dot::with_config(&graph, &[Config::EdgeNoLabel]);
-    
+
     // Save to temp file
     let temp_file = format!("cell_{}_{}_relationships.dot", row, col);
     let mut file = match File::create(&temp_file) {
@@ -171,29 +169,29 @@ pub fn visualize_cell_relationships(
             return CommandStatus::CmdOk;
         }
     };
-    
+
     if let Err(e) = writeln!(file, "{:?}", dot) {
         eprintln!("Failed to write to dot file: {}", e);
         return CommandStatus::CmdOk;
     }
 
     println!("Cell relationships saved to {}", temp_file);
-    
+
     // Attempt to render with Graphviz if available
     let output_file = format!("cell_{}_{}_relationships.png", row, col);
     match Command::new("dot")
         .args(["-Tpng", &temp_file, "-o", &output_file])
-        .output() 
+        .output()
     {
         Ok(_) => {
             println!("Cell relationship diagram generated as {}", output_file);
             // Try to open the image with the default viewer
             #[cfg(target_os = "windows")]
             let _ = Command::new("cmd").args(["/C", &output_file]).spawn();
-            
+
             #[cfg(target_os = "macos")]
             let _ = Command::new("open").arg(&output_file).spawn();
-            
+
             #[cfg(target_os = "linux")]
             let _ = Command::new("xdg-open").arg(&output_file).spawn();
         }
@@ -205,17 +203,18 @@ pub fn visualize_cell_relationships(
 
     // Print textual representation of the relationships
     println!("\nCell {}{}:", spreadsheet.get_column_name(col), row + 1);
-    
+
     // Show parents
     if let Some(meta) = spreadsheet.cell_meta.get(&cell_key) {
         println!("  Parents:");
         let mut has_parents = false;
-        
+
         for parent_key in [meta.parent1, meta.parent2].iter().filter(|&&k| k >= 0) {
             has_parents = true;
             let (r, c) = spreadsheet.get_row_col(*parent_key);
-            println!("    - {}{}: {}", 
-                spreadsheet.get_column_name(c), 
+            println!(
+                "    - {}{}: {}",
+                spreadsheet.get_column_name(c),
                 r + 1,
                 match spreadsheet.grid[*parent_key as usize] {
                     CellValue::Integer(val) => val.to_string(),
@@ -223,20 +222,21 @@ pub fn visualize_cell_relationships(
                 }
             );
         }
-        
+
         if !has_parents {
             println!("    (none)");
         }
     }
-    
+
     // Show children
     println!("  Children:");
     if let Some(children) = spreadsheet.get_cell_children(cell_key) {
         if !children.is_empty() {
             for &child_key in children {
                 let (r, c) = spreadsheet.get_row_col(child_key);
-                println!("    - {}{}: {}", 
-                    spreadsheet.get_column_name(c), 
+                println!(
+                    "    - {}{}: {}",
+                    spreadsheet.get_column_name(c),
                     r + 1,
                     match spreadsheet.grid[child_key as usize] {
                         CellValue::Integer(val) => val.to_string(),
@@ -250,6 +250,6 @@ pub fn visualize_cell_relationships(
     } else {
         println!("    (none)");
     }
-    
+
     CommandStatus::CmdOk
 }

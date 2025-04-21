@@ -1,10 +1,9 @@
-use crate::spreadsheet::{Spreadsheet, CommandStatus};
 use crate::cell::{CellValue, parse_cell_reference};
 use crate::formula::parse_range;
-use crate::formula::{eval_max, eval_min, sum_value, eval_variance, eval_avg};
+use crate::formula::{eval_avg, eval_max, eval_min, eval_variance, sum_value};
 use crate::graph::{add_children, remove_all_parents};
-use crate::reevaluate_topo::{toposort_reval_detect_cycle, sleep_fn};
-
+use crate::reevaluate_topo::{sleep_fn, toposort_reval_detect_cycle};
+use crate::spreadsheet::{CommandStatus, Spreadsheet};
 
 pub fn handle_sleep(
     sheet: &mut Spreadsheet,
@@ -14,12 +13,12 @@ pub fn handle_sleep(
     sleep_time: &mut f64,
 ) -> CommandStatus {
     let cell_key = sheet.get_key(row, col);
-    
+
     // Handle cell reference case
     if let Ok((target_row, target_col)) = parse_cell_reference(sheet, expr) {
         // Get parent key before any borrowing
         let pkey = sheet.get_key(target_row, target_col);
-        
+
         // Check for self-reference early (optimization)
         if row == target_row && col == target_col {
             return CommandStatus::CmdCircularRef;
@@ -27,13 +26,13 @@ pub fn handle_sleep(
 
         // Remove parents and update cell in one block
         remove_all_parents(sheet, row, col);
-                
+
         // Set up the new cell metadata
         let meta = sheet.get_cell_meta(row, col);
         meta.parent1 = pkey;
         meta.parent2 = -1;
-        meta.formula = 102;    // Custom formula code for sleep
-        
+        meta.formula = 102; // Custom formula code for sleep
+
         // // Check for circular reference
         // if detect_cycle(sheet, pkey, -1, 102, cell_key) {
         //     if let Some(old) = old_meta {
@@ -45,7 +44,7 @@ pub fn handle_sleep(
         //     }
         //     return CommandStatus::CmdCircularRef;
         // }
-        
+
         // Add children and update sleep time
         add_children(sheet, pkey, -1, 102, row, col);
         // Add to sleep time if integer
@@ -54,11 +53,10 @@ pub fn handle_sleep(
         if let CellValue::Integer(val) = parent_value {
             // Update cell value and sleep time
             sleep_fn(sheet, row, col, *val, sleep_time);
-        }
-        else{
+        } else {
             *sheet.get_mut_cell(row, col) = CellValue::Error;
         }
-    } 
+    }
     // Handle numeric literal case
     else if let Ok(val) = expr.parse::<i32>() {
         // Remove all parents and update cell in one sequence
@@ -67,11 +65,10 @@ pub fn handle_sleep(
         // Delete the cell meta entry
         sheet.cell_meta.remove(&cell_key);
         sleep_fn(sheet, row, col, val, sleep_time);
-    }
-    else {
+    } else {
         return CommandStatus::CmdUnrecognized;
     }
-    
+
     CommandStatus::CmdOk
 }
 
@@ -82,7 +79,7 @@ pub fn evaluate_arithmetic(
     expr: &str,
 ) -> CommandStatus {
     let cell_key = sheet.get_key(row, col);
-    
+
     // Case 1: Integer literal
     if let Ok(number) = expr.parse::<i32>() {
         remove_all_parents(sheet, row, col);
@@ -90,10 +87,10 @@ pub fn evaluate_arithmetic(
         // to avoid memory leaks
         sheet.cell_meta.remove(&cell_key);
         *sheet.get_mut_cell(row, col) = CellValue::Integer(number);
-        
+
         return CommandStatus::CmdOk;
     }
-    
+
     // Case 2: Simple cell reference - check using bytes for better performance
     let mut all_alnum = true;
     for &b in expr.as_bytes() {
@@ -102,34 +99,33 @@ pub fn evaluate_arithmetic(
             break;
         }
     }
-    
+
     if all_alnum {
         match parse_cell_reference(sheet, expr) {
             Ok((target_row, target_col)) => {
-                
                 // Get reference cell key and value
                 let ref_cell_key = sheet.get_key(target_row, target_col);
 
                 // Remove old dependencies and set new ones
                 remove_all_parents(sheet, row, col);
-                
+
                 // Update metadata
                 let meta = sheet.get_cell_meta(row, col);
                 meta.parent1 = ref_cell_key;
                 meta.parent2 = -1;
-                meta.formula = 82;  // Code for simple cell reference
-                
+                meta.formula = 82; // Code for simple cell reference
+
                 // Add dependency
                 add_children(sheet, ref_cell_key, -1, 82, row, col);
-                
+
                 // Update cell value
-                *sheet.get_mut_cell(row, col) =  match sheet.get_cell(target_row, target_col) {
+                *sheet.get_mut_cell(row, col) = match sheet.get_cell(target_row, target_col) {
                     CellValue::Integer(val) => CellValue::Integer(*val),
                     _ => CellValue::Error,
                 };
                 return CommandStatus::CmdOk;
-            },
-            Err(status) => return status
+            }
+            Err(status) => return status,
         }
     }
 
@@ -138,7 +134,7 @@ pub fn evaluate_arithmetic(
     let bytes = expr.as_bytes();
     let mut op_idx = 0;
     let mut op = 0u8;
-    
+
     // Start at index 1 to handle leading minus sign
     for i in 1..bytes.len() {
         match bytes[i] {
@@ -146,23 +142,23 @@ pub fn evaluate_arithmetic(
                 op = bytes[i];
                 op_idx = i;
                 break;
-            },
+            }
             _ => {}
         }
     }
-    
+
     if op_idx == 0 {
         return CommandStatus::CmdUnrecognized;
     }
-    
+
     // Split into left and right parts
     let left = &expr[..op_idx];
-    let right = &expr[op_idx+1..];
-    
+    let right = &expr[op_idx + 1..];
+
     if left.is_empty() || right.is_empty() {
         return CommandStatus::CmdUnrecognized;
     }
-    
+
     // Variables to track cell references and values
     let mut left_val = 0;
     let mut right_val = 0;
@@ -171,18 +167,17 @@ pub fn evaluate_arithmetic(
     let mut error_found = false;
     let mut left_cell_key = -1;
     let mut right_cell_key = -1;
-    
+
     // Parse left operand
     if let Ok(num) = left.parse::<i32>() {
         left_val = num;
     } else {
         // Try as cell reference
         match parse_cell_reference(sheet, left) {
-            Ok((left_row, left_col)) => {      
-
+            Ok((left_row, left_col)) => {
                 left_is_cell = true;
                 left_cell_key = sheet.get_key(left_row, left_col);
-                
+
                 // Get reference cell value
                 let left_cell = sheet.get_cell(left_row, left_col);
                 match left_cell {
@@ -191,11 +186,11 @@ pub fn evaluate_arithmetic(
                         error_found = true;
                     }
                 }
-            },
-            Err(status) => return status
+            }
+            Err(status) => return status,
         }
     }
-    
+
     // Parse right operand
     if let Ok(num) = right.parse::<i32>() {
         right_val = num;
@@ -203,10 +198,9 @@ pub fn evaluate_arithmetic(
         // Try as cell reference
         match parse_cell_reference(sheet, right) {
             Ok((right_row, right_col)) => {
-                
                 right_is_cell = true;
                 right_cell_key = sheet.get_key(right_row, right_col);
-                
+
                 // Get reference cell value
                 let right_cell = sheet.get_cell(right_row, right_col);
                 match right_cell {
@@ -215,57 +209,63 @@ pub fn evaluate_arithmetic(
                         error_found = true;
                     }
                 }
-            },
-            Err(status) => return status
+            }
+            Err(status) => return status,
         }
     }
-    
+
     // Remove old dependencies
     remove_all_parents(sheet, row, col);
-    
+
     // Determine formula type based on operator and operand types
     let mut formula_type = match op {
         b'+' => 10,
         b'-' => 20,
         b'*' => 40,
         b'/' => 30,
-        _ => unreachable!()
+        _ => unreachable!(),
     };
-    
+
     // Adjust formula type based on cell references (like C code)
     if left_is_cell && right_is_cell {
-        formula_type += 0;    // Both are cells, no adjustment needed
+        formula_type += 0; // Both are cells, no adjustment needed
     } else if left_is_cell {
         formula_type += 2;
     } else if right_is_cell {
         formula_type += 3;
     }
-    
+
     // Set metadata
     let meta = sheet.get_cell_meta(row, col);
     meta.formula = formula_type;
-    meta.parent1 = if left_is_cell { left_cell_key } else { left_val };
-    meta.parent2 = if right_is_cell { right_cell_key } else { right_val };
-    
+    meta.parent1 = if left_is_cell {
+        left_cell_key
+    } else {
+        left_val
+    };
+    meta.parent2 = if right_is_cell {
+        right_cell_key
+    } else {
+        right_val
+    };
+
     // Check for circular references
-    
+
     // Add dependencies
     if left_is_cell && right_is_cell {
         // Add dependencies for both cells
         add_children(sheet, left_cell_key, right_cell_key, formula_type, row, col);
-    }
-    else if left_is_cell {
+    } else if left_is_cell {
         // Ordering of Cells matters
         add_children(sheet, left_cell_key, -1, formula_type, row, col);
-    }
-    else if right_is_cell {
+    } else if right_is_cell {
         // Ordering of Cells matters
         add_children(sheet, -1, right_cell_key, formula_type, row, col);
     }
-    
+
     // Calculate result
     let cell = sheet.get_mut_cell(row, col);
-    
+
     if error_found {
         *cell = CellValue::Error;
     } else {
@@ -279,11 +279,11 @@ pub fn evaluate_arithmetic(
                 } else {
                     *cell = CellValue::Integer(left_val / right_val);
                 }
-            },
-            _ => unreachable!()
+            }
+            _ => unreachable!(),
         }
     }
-    
+
     CommandStatus::CmdOk
 }
 
@@ -301,28 +301,34 @@ pub fn evaluate_formula(
 
     // Optimize function checks by using bytes for prefix matching
     let bytes = expr.as_bytes();
-    
+
     // Check for range-based functions with a single pass
     let (is_formula, formula_type, prefix_len) = match bytes.get(0..3) {
         Some(b"AVG") if bytes.get(3) == Some(&b'(') => (true, 6, 4),
         Some(b"MIN") if bytes.get(3) == Some(&b'(') => (true, 7, 4),
         Some(b"MAX") if bytes.get(3) == Some(&b'(') => (true, 8, 4),
         Some(b"SUM") if bytes.get(3) == Some(&b'(') => (true, 5, 4),
-        Some(b"SLE") if bytes.len() > 5 && 
-                        bytes[3] == b'E' && 
-                        bytes[4] == b'P' && 
-                        bytes.get(5) == Some(&b'(') => {
+        Some(b"SLE")
+            if bytes.len() > 5
+                && bytes[3] == b'E'
+                && bytes[4] == b'P'
+                && bytes.get(5) == Some(&b'(') =>
+        {
             // Handle sleep function separately
             if !expr.ends_with(')') {
                 return CommandStatus::CmdUnrecognized;
             }
             return handle_sleep(sheet, row, col, &expr[6..expr.len() - 1], sleep_time);
-            },
-        Some(b"STD") if bytes.len() > 5 && 
-                        bytes[3] == b'E' && 
-                        bytes[4] == b'V' && 
-                        bytes.get(5) == Some(&b'(') => (true, 9, 6),
-        _ => (false, -1, 0)
+        }
+        Some(b"STD")
+            if bytes.len() > 5
+                && bytes[3] == b'E'
+                && bytes[4] == b'V'
+                && bytes.get(5) == Some(&b'(') =>
+        {
+            (true, 9, 6)
+        }
+        _ => (false, -1, 0),
     };
 
     if is_formula {
@@ -343,7 +349,7 @@ pub fn evaluate_formula(
         // let cell_key = sheet.get_key(row, col);
         let parent1 = sheet.get_key(range.start_row, range.start_col);
         let parent2 = sheet.get_key(range.end_row, range.end_col);
-        remove_all_parents(sheet, row, col); 
+        remove_all_parents(sheet, row, col);
         // Update metadata
         let meta = sheet.get_cell_meta(row, col);
         meta.parent1 = parent1;
@@ -352,7 +358,7 @@ pub fn evaluate_formula(
 
         // Add children and evaluate the appropriate function
         add_children(sheet, parent1, parent2, formula_type, row, col);
-        
+
         match formula_type {
             9 => eval_variance(sheet, row, col, parent1, parent2),
             8 => eval_max(sheet, row, col, parent1, parent2),
@@ -364,10 +370,15 @@ pub fn evaluate_formula(
         // Handle arithmetic expressions
         evaluate_arithmetic(sheet, row, col, expr)
     }
-
 }
 
-pub fn set_cell_value(sheet: &mut Spreadsheet, row: i16, col: i16, expr: &str, sleep_time: &mut f64) -> CommandStatus {
+pub fn set_cell_value(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    expr: &str,
+    sleep_time: &mut f64,
+) -> CommandStatus {
     let old_meta = sheet.cell_meta.get(&sheet.get_key(row, col)).cloned();
     let old_value = match sheet.get_cell(row, col) {
         CellValue::Integer(val) => CellValue::Integer(*val),
@@ -384,7 +395,7 @@ pub fn set_cell_value(sheet: &mut Spreadsheet, row: i16, col: i16, expr: &str, s
             remove_all_parents(sheet, row, col);
             // Restore the old value
             *sheet.get_mut_cell(row, col) = old_value;
-            // Old meta 
+            // Old meta
             if let Some(old) = old_meta {
                 let (parent1, parent2, formula) = (old.parent1, old.parent2, old.formula);
                 sheet.cell_meta.insert(sheet.get_key(row, col), old);
@@ -403,7 +414,7 @@ pub fn handle_command(
     sheet: &mut Spreadsheet,
     trimmed: &str,
     sleep_time: &mut f64,
-) -> CommandStatus {    
+) -> CommandStatus {
     // Fast path for single-character commands to avoid string comparisons
     if trimmed.len() == 1 {
         match trimmed.as_bytes()[0] {
@@ -412,73 +423,75 @@ pub fn handle_command(
                 let direction = trimmed.chars().next().unwrap();
                 sheet.scroll_viewport(direction);
                 return CommandStatus::CmdOk;
-            },
+            }
             b'q' => return CommandStatus::CmdOk, // Handle quit command if needed
             _ => {}
         }
     }
-    
+
     // Use match for special commands for better branch prediction
     match trimmed {
         "disable_output" => {
             sheet.output_enabled = false;
             return CommandStatus::CmdOk;
-        },
+        }
         "enable_output" => {
             sheet.output_enabled = true;
             return CommandStatus::CmdOk;
-        },
+        }
         _ => {}
     }
-    
+
     // Check for cell dependency visualization command
     if trimmed.starts_with("visualize ") {
         let cell_ref = &trimmed[10..]; // Skip "visualize " prefix
         match parse_cell_reference(sheet, cell_ref) {
             Ok((row, col)) => {
                 return sheet.visualize_cell_relationships(row, col);
-            },
+            }
             Err(status) => {
                 return status;
             }
         }
     }
-    
+
     // Check for scroll_to command with byte-based comparison
-    if trimmed.len() > 10 && &trimmed.as_bytes()[..9] == b"scroll_to" && trimmed.as_bytes()[9] == b' ' {
+    if trimmed.len() > 10
+        && &trimmed.as_bytes()[..9] == b"scroll_to"
+        && trimmed.as_bytes()[9] == b' '
+    {
         let cell_ref = &trimmed[10..];
         return sheet.scroll_to_cell(cell_ref);
     }
-    
+
     // Check for cell assignment using byte search for '='
     let bytes = trimmed.as_bytes();
     let mut eq_pos = None;
-    
+
     for (i, &b) in bytes.iter().enumerate() {
         if b == b'=' {
             eq_pos = Some(i);
             break;
         }
     }
-    
+
     if let Some(pos) = eq_pos {
         // Use slice operations which are more efficient than split_at
         let cell_ref = trimmed[..pos].trim();
-        let expr = trimmed[pos+1..].trim();
-        
+        let expr = trimmed[pos + 1..].trim();
+
         // Parse the cell reference with direct result handling
         return match parse_cell_reference(sheet, cell_ref) {
             Ok((row, col)) => {
                 // All bounds checks in one condition
                 set_cell_value(sheet, row, col, expr, sleep_time)
-            },
+            }
             Err(status) => status,
         };
     }
     // No recognized command
     CommandStatus::CmdUnrecognized
 }
-
 
 #[cfg(test)]
 mod tests {

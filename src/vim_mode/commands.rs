@@ -1,7 +1,7 @@
 // vim_mode/commands.rs
-use crate::spreadsheet::{Spreadsheet, CommandStatus};
+use super::editor::{EditorMode, EditorState};
 use crate::evaluator;
-use super::editor::{EditorState, EditorMode};
+use crate::spreadsheet::{CommandStatus, Spreadsheet};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -32,12 +32,12 @@ fn handle_normal_mode_command(
             'h' | 'j' | 'k' | 'l' => {
                 state.move_cursor(input.chars().next().unwrap(), sheet);
                 return CommandStatus::CmdOk;
-            },
+            }
             // Mode switching
             'i' => {
                 state.mode = EditorMode::Insert;
                 return CommandStatus::CmdOk;
-            },
+            }
             // Editing commands
             'd' => return cut_cell(sheet, state),
             'y' => return yank_cell(sheet, state),
@@ -45,15 +45,15 @@ fn handle_normal_mode_command(
             'q' => {
                 state.should_quit = true;
                 return CommandStatus::CmdOk;
-            },
+            }
             _ => {}
         }
     }
-    
+
     // File commands
     if input.starts_with(':') {
         let cmd = &input[1..];
-        
+
         // :w - write file
         if cmd.starts_with('w') && !cmd.starts_with("wq") {
             // Extract filename if provided
@@ -64,7 +64,7 @@ fn handle_normal_mode_command(
             } else {
                 None
             };
-            
+
             if let Some(file) = filename {
                 state.save_file = Some(file.clone());
                 return save_spreadsheet(sheet, &file);
@@ -72,13 +72,13 @@ fn handle_normal_mode_command(
                 return CommandStatus::CmdUnrecognized;
             }
         }
-        
+
         // :q - quit
         if cmd == "q" {
             state.should_quit = true;
             return CommandStatus::CmdOk;
         }
-        
+
         // :wq - write and quit
         if cmd.starts_with("wq") {
             // Extract filename if provided (e.g., ":wq filename.csv")
@@ -126,28 +126,29 @@ fn handle_normal_mode_command(
 // Save spreadsheet to a file
 fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
     let path = Path::new(filename);
-    
+
     // Determine file type (CSV or TSV) from extension
     let is_tsv = path.extension().map(|ext| ext == "tsv").unwrap_or(false);
     let delimiter = if is_tsv { '\t' } else { ',' };
-    
+
     // Open file for writing
     let file = match OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(path) {
+        .open(path)
+    {
         Ok(file) => file,
         Err(_) => return CommandStatus::CmdUnrecognized,
     };
-    
+
     // Create a buffered writer
     let mut writer = std::io::BufWriter::new(file);
-    
+
     // Write the spreadsheet data (write all cells, including zeros)
     for row in 0..sheet.rows {
         let mut line = String::new();
-        
+
         for col in 0..sheet.cols {
             if col > 0 {
                 line.push(delimiter);
@@ -157,64 +158,62 @@ fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
                 crate::cell::CellValue::Error => line.push_str("ERR"),
             }
         }
-        
+
         // Write the line
         if let Err(_) = writeln!(writer, "{}", line) {
             return CommandStatus::CmdUnrecognized;
         }
     }
-    
+
     CommandStatus::CmdOk
 }
 
 // Load a spreadsheet from a file
 pub fn load_spreadsheet(sheet: &mut Spreadsheet, filename: &str) -> CommandStatus {
     let path = Path::new(filename);
-    
+
     // Determine file type (CSV or TSV) from extension
     let is_tsv = path.extension().map(|ext| ext == "tsv").unwrap_or(false);
     let delimiter = if is_tsv { '\t' } else { ',' };
-    
+
     // Open file for reading
     let file = match File::open(path) {
         Ok(file) => file,
         Err(_) => return CommandStatus::CmdUnrecognized,
     };
-    
+
     // Create a buffered reader
     let reader = BufReader::new(file);
-    
+
     // Read and parse the file
     for (row_idx, line_result) in reader.lines().enumerate() {
         if row_idx >= sheet.rows as usize {
             break; // Don't exceed sheet dimensions
         }
-        
+
         let line = match line_result {
             Ok(line) => line,
             Err(_) => continue,
         };
-        
+
         // Split line by delimiter
         for (col_idx, value) in line.split(delimiter).enumerate() {
             if col_idx >= sheet.cols as usize {
                 break; // Don't exceed sheet dimensions
             }
-            
+
             // Parse and set cell value
             if !value.is_empty() {
-                let cell_ref = format!("{}{}", 
-                    sheet.get_column_name(col_idx as i16),
-                    row_idx + 1);
+                let cell_ref = format!("{}{}", sheet.get_column_name(col_idx as i16), row_idx + 1);
                 let command = format!("{}={}", cell_ref, value);
-                
+
                 // Process the command
                 let mut sleep_time = 0.0;
                 evaluator::handle_command(sheet, &command, &mut sleep_time);
             }
         }
     }
-    
+
     CommandStatus::CmdOk
 }
 
@@ -248,10 +247,10 @@ fn cut_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
     if status != CommandStatus::CmdOk {
         return status;
     }
-    
+
     // Then clear it by setting it to an empty value
     let cell_ref = state.cursor_to_cell_ref(sheet);
-    
+
     // Use empty string to clear the cell
     let command = format!("{}=", cell_ref);
     evaluator::handle_command(sheet, &command, &mut 0.0);
@@ -263,7 +262,7 @@ fn yank_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus 
     // Get the cell reference string and value
     let cell_ref = state.cursor_to_cell_ref(sheet);
     let cell_value = sheet.get_cell(state.cursor_row, state.cursor_col).clone();
-    
+
     // Get the formula for the cell (if any)
     let cell_key = sheet.get_key(state.cursor_row, state.cursor_col);
     let formula = if let Some(meta) = sheet.cell_meta.get(&cell_key) {
@@ -277,10 +276,10 @@ fn yank_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus 
     } else {
         "".to_string()
     };
-    
+
     // Store in clipboard
     state.clipboard = Some((state.cursor_row, state.cursor_col, cell_value, formula));
-    
+
     CommandStatus::CmdOk
 }
 
@@ -289,18 +288,18 @@ fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus
     if let Some((_row, _col, _value, formula)) = &state.clipboard {
         // Get the target cell reference
         let cell_ref = state.cursor_to_cell_ref(sheet);
-        
+
         // If there's a formula, paste that
         if !formula.is_empty() {
             let command = format!("{}={}", cell_ref, formula);
-            return evaluator::handle_command(sheet, &command , &mut 0.0);
+            return evaluator::handle_command(sheet, &command, &mut 0.0);
         } else {
             // Otherwise paste the literal value
             match _value {
                 crate::cell::CellValue::Integer(value) => {
                     let command = format!("{}={}", cell_ref, value);
-                    return evaluator::handle_command(sheet, &command ,&mut 0.0);
-                },
+                    return evaluator::handle_command(sheet, &command, &mut 0.0);
+                }
                 crate::cell::CellValue::Error => {
                     // Can't paste an error
                     return CommandStatus::CmdUnrecognized;

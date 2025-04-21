@@ -1,0 +1,140 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+  \geometry{margin=1in}
+\usepackage{hyperref}
+  \hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+\usepackage{xcolor}
+\usepackage{listings}
+
+%=== Listings setup for Rust ================================================
+\definecolor{keywordcolor}{RGB}{0,0,180}
+\definecolor{commentcolor}{RGB}{0,150,0}
+\definecolor{stringcolor}{RGB}{180,0,0}
+
+\lstdefinelanguage{Rust}{
+  keywords={as,break,const,continue,crate,else,enum,extern,false,fn,for,if,impl,in,let,loop,match,mod,move,mut,pub,ref,return,self,Self,static,struct,super,trait,true,type,unsafe,use,where,while},
+  ndkeywords={},
+  sensitive=true,
+  comment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  string=[b]",
+}
+
+\lstset{
+  language        = Rust,
+  basicstyle      = \ttfamily\small,
+  keywordstyle    = \color{keywordcolor}\bfseries,
+  commentstyle    = \color{commentcolor}\itshape,
+  stringstyle     = \color{stringcolor},
+  showstringspaces=false,
+  frame           = single,
+  breaklines      = true,
+  numbers         = left,
+  numberstyle     = \tiny,
+  stepnumber      = 1,
+  numbersep       = 5pt,
+  tabsize         = 2,
+  captionpos      = b,
+}
+
+%==========================================================================
+
+\title{Rust Lab Spreadsheet - Design and Architecture}
+\author{
+  Karthik Manikandan\\ 2023CS1
+  \and
+  Yash Shindekar \\ 2023CS1
+  \and
+  Divya Haasini \\2023CS1
+}
+
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Primary Data Structures}
+\label{sec:data-structures}  
+
+We have used HashMaps
+
+\begin{lstlisting}[language=Rust, caption={Key spreadsheet types}, label=lst:types]
+use crate::spreadsheet::{CommandStatus, Spreadsheet};
+
+/// Example of a cell value enum
+#[derive(Debug, Clone, PartialEq)]
+pub enum CellValue {
+    Integer(i32),
+    Error,
+}
+
+/// Metadata for dependency tracking
+pub struct CellMeta {
+    pub formula: i16,
+    pub parent1: i32,
+    pub parent2: i32,
+}
+\end{lstlisting}
+
+\emph{(Replace the above with the actual definitions of your primary data structures.)}
+
+\section{Interfaces Between Software Modules}
+\label{sec:interfaces}
+
+Describe how each module talks to the others. For example:
+
+\begin{itemize}
+  \item \textbf{\texttt{cell}} exposes \lstinline{CellValue} and parsing routines.
+  \item \textbf{\texttt{formula}} provides evaluation functions like \lstinline{eval_avg}, \lstinline{sum_value}, etc.
+  \item \textbf{\texttt{reevaluate_topo}} re‑evaluates cells in topological order and detects cycles.
+  \item \textbf{\texttt{spreadsheet}} is the central orchestrator: it holds the grid, dependency maps, and viewport state.
+\end{itemize}
+
+You can show function prototypes to clarify:
+
+\begin{lstlisting}[language=Rust, caption={Spreadsheet façade}, label=lst:spreadsheet-api]
+pub struct Spreadsheet { /* ... */ }
+
+impl Spreadsheet {
+    pub fn create(rows: i16, cols: i16) -> Option<Spreadsheet>;
+    pub fn set_cell_value(&mut self, row: i16, col: i16, expr: &str, sleep: &mut f64) -> CommandStatus;
+    pub fn get_cell(&self, row: i16, col: i16) -> &CellValue;
+    // …and so on
+}
+\end{lstlisting}
+
+\section{Design Justification}
+\label{sec:justification}
+
+Here explain why your choices make for a robust, maintainable system:
+
+\begin{itemize}
+  \item \textbf{Separation of Concerns:} data storage, parsing, evaluation, and visualization are cleanly decoupled.
+  \item \textbf{Performance:} using contiguous `Vec<CellValue>` for O(1) cell access; minimal allocations in `parse_cell_reference`.
+  \item \textbf{Extensibility:} adding new formulas or functions involves plugging into `evaluate_formula` without touching core data structures.
+  \item \textbf{Safety:} Rust’s ownership and type system prevent data races and many classes of bugs.
+\end{itemize}
+
+\section{Design Evolution \& Modifications}
+\label{sec:modifications}
+
+Document any changes you made after initial design:
+
+\begin{itemize}
+  \item Added range‑based dependency tracking (`RangeChild` & `add_range_child`) to optimize multi‑cell formulas.
+  \item Switched from storing children in a \lstinline{Vec} to a \lstinline{HashMap<i32, HashSet<i32>>} for sparser graphs.
+  \item Introduced `sleep_fn` and the `SLEEP` formula for performance benchmarking.
+  \item Refactored cycle detection into its own module (`toposort_reval_detect_cycle`) for testability.
+\end{itemize}
+
+\section*{References}
+\begin{itemize}
+  \item Rust API docs for \texttt{Spreadsheet}, \texttt{CommandStatus}, etc.
+  \item Internal design notes or RFC links (if any).
+\end{itemize}
+
+\end{document}
