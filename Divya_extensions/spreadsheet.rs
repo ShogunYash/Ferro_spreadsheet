@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::cell::{CellValue, parse_cell_reference}; 
 use crate::visualize_cells;
-use crate::formula::Range;  // Assuming Range is defined in formula.rs
+use crate::formula::Range;
 
 // Constants
 pub const MAX_ROWS: i16 = 999;    // Maximum number of rows in the spreadsheet  
@@ -60,6 +60,7 @@ pub struct Spreadsheet {
     pub display_cols: i16,
     pub locked_ranges: Vec<Range>,
     pub named_ranges: HashMap<String, Range>, // New field for named ranges
+    pub cell_history: HashMap<i32, Vec<CellValue>>, // New field for cell history
 }
 
 impl Spreadsheet {
@@ -87,7 +88,8 @@ impl Spreadsheet {
             display_rows: 10,
             display_cols: 10,
             locked_ranges: Vec::new(),
-            named_ranges: HashMap::new(), // Initialize named_ranges
+            named_ranges: HashMap::new(),
+            cell_history: HashMap::new(), // Initialize cell_history
         })
     }
 
@@ -195,7 +197,7 @@ impl Spreadsheet {
         cell_col >= start_col && cell_col <= end_col
     }
     
-    // Add a child to a cell's dependents (modified for HashMap of boxed HashSets)
+    // Add a child to a cell's dependents
     pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
         self.children
             .entry(*parent_key)
@@ -203,7 +205,7 @@ impl Spreadsheet {
             .insert(*child_key);
     }
     
-    // Remove a child from a cell's dependents (modified for HashMap of boxed HashSets)
+    // Remove a child from a cell's dependents
     pub fn remove_child(&mut self, parent_key: i32, child_key: i32) {
         if let Some(children) = self.children.get_mut(&parent_key) {
             children.remove(&child_key);
@@ -215,7 +217,7 @@ impl Spreadsheet {
         }
     }
       
-    // Get children for a cell (immutable) (modified for HashMap of boxed HashSets)
+    // Get children for a cell (immutable)
     pub fn get_cell_children(&self, key: i32) -> Option<&HashSet<i32>> {
         self.children.get(&key).map(|boxed_set| boxed_set.as_ref())
     }
@@ -227,8 +229,8 @@ impl Spreadsheet {
         
         let start_row = self.viewport_row;
         let start_col = self.viewport_col;
-        let display_row = min(self.rows - start_row, self.display_rows); // Use customizable display size
-        let display_col = min(self.cols - start_col, self.display_cols); // Use customizable display size
+        let display_row = min(self.rows - start_row, self.display_rows);
+        let display_col = min(self.cols - start_col, self.display_cols);
         
         // Print column headers
         print!("     ");

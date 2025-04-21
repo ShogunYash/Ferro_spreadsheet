@@ -303,11 +303,9 @@ pub fn set_cell_value(
         return CommandStatus::CmdLockedCell;
     }
 
-    let old_meta = sheet.cell_meta.get(&sheet.get_key(row, col)).cloned();
-    let old_value = match sheet.get_cell(row, col) {
-        CellValue::Integer(val) => CellValue::Integer(*val),
-        _ => CellValue::Error,
-    };
+    let cell_key = sheet.get_key(row, col);
+    let old_meta = sheet.cell_meta.get(&cell_key).cloned();
+    let old_value = sheet.get_cell(row, col).clone();
     let status = evaluate_formula(sheet, row, col, expr, sleep_time);
     if let CommandStatus::CmdOk = status {
         let has_cycle = toposort_reval_detect_cycle(sheet, row, col, sleep_time);
@@ -315,16 +313,39 @@ pub fn set_cell_value(
             remove_all_parents(sheet, row, col);
             *sheet.get_mut_cell(row, col) = old_value;
             if let Some(old) = old_meta {
-                let (parent1, parent2, formula) = (old.parent1, old.parent2, old.formula);
-                sheet.cell_meta.insert(sheet.get_key(row, col), old);
-                add_children(sheet, parent1, parent2, formula, row, col);
+                sheet.cell_meta.insert(cell_key, old.clone());
+                add_children(sheet, old.parent1, old.parent2, old.formula, row, col);
             } else {
-                sheet.cell_meta.remove(&sheet.get_key(row, col));
+                sheet.cell_meta.remove(&cell_key);
             }
             return CommandStatus::CmdCircularRef;
+        } else {
+            // Successfully set, push old_value to history
+            sheet.cell_history.entry(cell_key).or_insert_with(Vec::new).push(old_value);
         }
     }
     status
+}
+
+fn set_cell_to_value(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    value: CellValue,
+    sleep_time: &mut f64,
+) -> CommandStatus {
+    if sheet.is_cell_locked(row, col) {
+        return CommandStatus::CmdLockedCell;
+    }
+    let cell_key = sheet.get_key(row, col);
+    // Remove formula and parents
+    remove_all_parents(sheet, row, col);
+    sheet.cell_meta.remove(&cell_key);
+    // Set new value
+    *sheet.get_mut_cell(row, col) = value;
+    // Reevaluate dependents
+    toposort_reval_detect_cycle(sheet, row, col, sleep_time);
+    CommandStatus::CmdOk
 }
 
 pub fn handle_command(
@@ -431,6 +452,25 @@ pub fn handle_command(
             }
         }
         return CommandStatus::CmdUnrecognized;
+    }
+
+    if trimmed.starts_with("history ") {
+        let cell_ref = trimmed[8..].trim();
+        return match resolve_cell_reference(sheet, cell_ref) {
+            Ok((row, col)) => {
+                let cell_key = sheet.get_key(row, col);
+                if let Some(history) = sheet.cell_history.get_mut(&cell_key) {
+                    if let Some(prev_value) = history.pop() {
+                        set_cell_to_value(sheet, row, col, prev_value, sleep_time)
+                    } else {
+                        CommandStatus::CmdOk // No history, do nothing
+                    }
+                } else {
+                    CommandStatus::CmdOk // No history, do nothing
+                }
+            },
+            Err(status) => status,
+        };
     }
 
     // Cell assignment
@@ -640,5 +680,24 @@ mod tests {
             CommandStatus::CmdOk
         );
         assert_eq!(sheet.viewport_row, 10);
+    }
+
+    #[test]
+    fn test_handle_command_history() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "A2=2", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(
+            handle_command(&mut sheet, "A2=3", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(
+            handle_command(&mut sheet, "history A2", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 0), CellValue::Integer(2));
     }
 }
