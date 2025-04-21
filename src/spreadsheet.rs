@@ -93,7 +93,7 @@ impl Spreadsheet {
     }
 
     // Helper to get index from row and column
-    fn get_index(&self, row: i16, col: i16) -> usize {
+    pub fn get_index(&self, row: i16, col: i16) -> usize {
         (row as usize) * (self.cols as usize) + (col as usize)
     }
 
