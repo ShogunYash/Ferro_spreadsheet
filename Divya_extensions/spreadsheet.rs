@@ -412,6 +412,10 @@ mod tests {
     use super::*;
     use crate::cell::CellValue;
 
+    fn create_test_spreadsheet(rows: i16, cols: i16) -> Spreadsheet {
+        Spreadsheet::create(rows, cols).unwrap()
+    }
+
     #[test]
     fn test_create_valid_dimensions() {
         let sheet = Spreadsheet::create(5, 5).unwrap();
@@ -555,5 +559,30 @@ mod tests {
         sheet.scroll_to_last_edited();
         assert_eq!(sheet.viewport_row, 2);
         assert_eq!(sheet.viewport_col, 3);
+    }
+
+    #[test]
+    fn test_get_parents_range_formula() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let parent1_key = sheet.get_key(0, 0);
+        let parent2_key = sheet.get_key(1, 1);
+        let meta = sheet.get_cell_meta(1, 1);
+        meta.parent1 = parent1_key;
+        meta.parent2 = parent2_key;
+        meta.formula = 5; // SUM
+        let parents = sheet.get_parents(sheet.get_key(1, 1));
+        assert!(parents.contains(&sheet.get_key(0, 0)));
+        assert!(parents.contains(&sheet.get_key(1, 1)));
+    }
+
+    #[test]
+    fn test_get_children_range() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let parent1 = sheet.get_key(0, 0);
+        let parent2 = sheet.get_key(1, 1);
+        let child = sheet.get_key(2, 2);
+        sheet.add_range_child(parent1, parent2, child);
+        let children = sheet.get_children(parent1);
+        assert!(children.contains(&child));
     }
 }

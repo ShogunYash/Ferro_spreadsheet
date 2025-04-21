@@ -1,5 +1,5 @@
 use crate::cell::{CellValue, parse_cell_reference};
-use crate::spreadsheet::{CommandStatus, Spreadsheet};
+use crate::spreadsheet::{Spreadsheet, CommandStatus};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Range {
@@ -10,13 +10,7 @@ pub struct Range {
 }
 
 // Optimize the sum_value function for large ranges
-pub fn sum_value(
-    sheet: &mut Spreadsheet,
-    row: i16,
-    col: i16,
-    parent1: i32,
-    parent2: i32,
-) -> CommandStatus {
+pub fn sum_value(sheet: &mut Spreadsheet, row: i16, col: i16, parent1: i32, parent2: i32) -> CommandStatus {    
     let mut sum = 0;
     let (start_row, start_col) = sheet.get_row_col(parent1);
     let (end_row, end_col) = sheet.get_row_col(parent2);
@@ -32,20 +26,14 @@ pub fn sum_value(
             }
         }
     }
-
+    
     // Now set the result
     *sheet.get_mut_cell(row, col) = CellValue::Integer(sum);
     CommandStatus::CmdOk
 }
 
 // Add variance evaluation function
-pub fn eval_variance(
-    sheet: &mut Spreadsheet,
-    row: i16,
-    col: i16,
-    parent1: i32,
-    parent2: i32,
-) -> CommandStatus {
+pub fn eval_variance(sheet: &mut Spreadsheet, row:i16 , col:i16, parent1: i32, parent2: i32) -> CommandStatus {
     let (start_row, start_col) = sheet.get_row_col(parent1);
     let (end_row, end_col) = sheet.get_row_col(parent2);
     let count = ((end_row - start_row + 1) as i32) * ((end_col - start_col + 1) as i32);
@@ -57,12 +45,13 @@ pub fn eval_variance(
         let val = *value / count;
         *cell_value = CellValue::Integer(val);
         mean_value = val as f64;
-    } else {
+    }
+    else {
         return CommandStatus::CmdOk;
     }
 
     let mut variance = 0.0;
-
+    
     for i in start_row..=end_row {
         for j in start_col..=end_col {
             if let CellValue::Integer(value) = *sheet.get_cell(i, j) {
@@ -77,13 +66,8 @@ pub fn eval_variance(
     CommandStatus::CmdOk
 }
 
-pub fn eval_min(
-    sheet: &mut Spreadsheet,
-    row: i16,
-    col: i16,
-    parent1: i32,
-    parent2: i32,
-) -> CommandStatus {
+
+pub fn eval_min(sheet: &mut Spreadsheet, row: i16, col: i16, parent1: i32, parent2: i32) -> CommandStatus {    
     let mut min_value = i32::MAX;
     let (start_row, start_col) = sheet.get_row_col(parent1);
     let (end_row, end_col) = sheet.get_row_col(parent2);
@@ -98,23 +82,17 @@ pub fn eval_min(
             }
         }
     }
-
+    
     // Now get the mutable cell and set its value (mutable borrow)
     *sheet.get_mut_cell(row, col) = CellValue::Integer(min_value);
     CommandStatus::CmdOk
 }
 
 // Fix eval_max implementation
-pub fn eval_max(
-    sheet: &mut Spreadsheet,
-    row: i16,
-    col: i16,
-    parent1: i32,
-    parent2: i32,
-) -> CommandStatus {
-    let mut max_value = i32::MIN;
+pub fn eval_max(sheet: &mut Spreadsheet, row: i16, col: i16, parent1: i32, parent2: i32) -> CommandStatus {
+    let mut max_value = i32::MIN; 
     let (start_row, start_col) = sheet.get_row_col(parent1);
-    let (end_row, end_col) = sheet.get_row_col(parent2);
+    let (end_row, end_col) = sheet.get_row_col(parent2);   
     // First collect all values (immutable borrows)
     for r in start_row..=end_row {
         for c in start_col..=end_col {
@@ -126,19 +104,14 @@ pub fn eval_max(
             }
         }
     }
-
+    
     // Now get the mutable cell and set its value (mutable borrow)
     *sheet.get_mut_cell(row, col) = CellValue::Integer(max_value);
     CommandStatus::CmdOk
 }
 
-pub fn eval_avg(
-    sheet: &mut Spreadsheet,
-    row: i16,
-    col: i16,
-    parent1: i32,
-    parent2: i32,
-) -> CommandStatus {
+
+pub fn eval_avg(sheet: &mut Spreadsheet, row: i16, col: i16, parent1: i32, parent2: i32) -> CommandStatus {
     let (start_row, start_col) = sheet.get_row_col(parent1);
     let (end_row, end_col) = sheet.get_row_col(parent2);
     let count = ((end_row - start_row + 1) as i32) * ((end_col - start_col + 1) as i32);
@@ -148,7 +121,7 @@ pub fn eval_avg(
             if let CellValue::Integer(value) = cell_value {
                 *cell_value = CellValue::Integer(*value / count);
             }
-        }
+        },
         _ => return CommandStatus::CmdOk,
     }
     CommandStatus::CmdOk
@@ -160,42 +133,37 @@ pub fn parse_range(spreadsheet: &Spreadsheet, range_str: &str) -> Result<Range, 
     if range_str.len() < 3 {
         return Err(CommandStatus::CmdUnrecognized);
     }
-
+    
     // Find the colon index using bytes to avoid UTF-8 decoding
     let bytes = range_str.as_bytes();
     let mut colon_index = 0;
-
+    
     for (i, &b) in bytes.iter().enumerate() {
         if b == b':' {
             colon_index = i;
             break;
         }
     }
-
+    
     // Validate colon position (must exist and have chars on both sides)
     if colon_index == 0 || colon_index + 1 >= range_str.len() {
         return Err(CommandStatus::CmdUnrecognized);
     }
-
+    
     // Avoid creating new strings by using slices
     let start_cell = &range_str[..colon_index];
     let end_cell = &range_str[colon_index + 1..];
-
+    
     // Parse cell references and validate them in one step
     let (start_row, start_col) = parse_cell_reference(spreadsheet, start_cell)?;
     let (end_row, end_col) = parse_cell_reference(spreadsheet, end_cell)?;
-
+    
     // Ensure coordinates are valid and range is properly ordered
-    if start_row < 0
-        || start_col < 0
-        || end_row < 0
-        || end_col < 0
-        || start_row > end_row
-        || start_col > end_col
-    {
+    if start_row < 0 || start_col < 0 || end_row < 0 || end_col < 0 || 
+       start_row > end_row || start_col > end_col {
         return Err(CommandStatus::CmdUnrecognized);
     }
-
+    
     // Construct the Range directly
     Ok(Range {
         start_row,

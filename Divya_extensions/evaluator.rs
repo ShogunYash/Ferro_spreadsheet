@@ -600,4 +600,50 @@ mod tests {
         assert_eq!(*sheet.get_cell(1, 0), CellValue::Integer(2));
         assert_eq!(sheet.last_edited, Some((1, 0)));
     }
+
+    #[test]
+    fn test_evaluate_arithmetic_div_by_zero() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        assert_eq!(
+            evaluate_arithmetic(&mut sheet, 0, 0, "5/0"),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Error);
+    }
+
+    #[test]
+    fn test_evaluate_formula_max() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(3);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "MAX(A1:B1)", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5));
+    }
+
+    #[test]
+    fn test_set_cell_value_circular_ref() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            set_cell_value(&mut sheet, 0, 0, "A1", &mut sleep_time),
+            CommandStatus::CmdCircularRef
+        );
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
+    }
+
+    #[test]
+    fn test_handle_command_scroll_to() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "scroll_to B2", &mut sleep_time).0,
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.viewport_row, 1);
+        assert_eq!(sheet.viewport_col, 1);
+    }
 }
