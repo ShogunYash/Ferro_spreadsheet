@@ -1,24 +1,20 @@
-use crate::cell::{CellValue, parse_cell_reference};
-use crate::formula::Range;
-use crate::visualize_cells;
 use std::cmp::min;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use crate::cell::{CellValue, parse_cell_reference}; 
+use std::collections::{HashMap, HashSet};
+use crate::cell::{CellValue, parse_cell_reference};
 use crate::visualize_cells;
 use crate::formula::Range;
 
 // Constants
-pub const MAX_ROWS: i16 = 999;    // Maximum number of rows in the spreadsheet  
-pub const MAX_COLS: i16 = 18278;  // Maximum number of columns in the spreadsheet
-pub const MAX_DISPLAY: i16 = 15;  // Maximum display size for rows and columns
+pub const MAX_ROWS: i16 = 999;
+pub const MAX_COLS: i16 = 18278;
+pub const MAX_DISPLAY: i16 = 15;
 
 // Structure to represent a range-based child relationship
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RangeChild {
-    pub start_key: i32, // Range start cell key
-    pub end_key: i32,   // Range end cell key
-    pub child_key: i32, // Child cell key
+    pub start_key: i32,
+    pub end_key: i32,
+    pub child_key: i32,
 }
 
 #[derive(Debug, PartialEq)]
@@ -30,7 +26,6 @@ pub enum CommandStatus {
     CmdLockedCell,
 }
 
-// Modified CellMeta to remove children (they're now stored separately)
 #[derive(Debug, Clone)]
 pub struct CellMeta {
     pub formula: i16,
@@ -48,12 +43,11 @@ impl CellMeta {
     }
 }
 
-// Spreadsheet structure with HashMap of boxed HashSets for children
 pub struct Spreadsheet {
-    pub grid: Vec<CellValue>, // Vector of CellValues (contiguous in memory)
-    pub children: HashMap<i32, Box<HashSet<i32>>>, // Map from cell key to boxed HashSet of children
-    pub range_children: Vec<RangeChild>, // Vector of range-based child relationships
-    pub cell_meta: HashMap<i32, CellMeta>, // Map from cell key to metadata
+    pub grid: Vec<CellValue>,
+    pub children: HashMap<i32, Box<HashSet<i32>>>,
+    pub range_children: Vec<RangeChild>,
+    pub cell_meta: HashMap<i32, CellMeta>,
     pub rows: i16,
     pub cols: i16,
     pub viewport_row: i16,
@@ -62,27 +56,23 @@ pub struct Spreadsheet {
     pub display_rows: i16,
     pub display_cols: i16,
     pub locked_ranges: Vec<Range>,
-    pub named_ranges: HashMap<String, Range>,                // Field for named ranges
-    pub cell_history: HashMap<i32, Vec<CellValue>>,          // Field for cell history
-    pub last_edited: Option<(i16, i16)>,                     // New field for last edited cell (row, col)
+    pub named_ranges: HashMap<String, Range>,
+    pub cell_history: HashMap<i32, Vec<CellValue>>,
+    pub last_edited: Option<(i16, i16)>,
 }
 
 impl Spreadsheet {
-    // Create a new spreadsheet with specified dimensions
     pub fn create(rows: i16, cols: i16) -> Option<Spreadsheet> {
         if rows < 1 || rows > MAX_ROWS || cols < 1 || cols > MAX_COLS {
             eprintln!("Invalid spreadsheet dimensions");
             return None;
         }
-
-        // Create empty cells - initialize with Integer(0)
         let total = rows as usize * cols as usize;
         let grid = vec![CellValue::Integer(0); total];
-
         Some(Spreadsheet {
             grid,
             children: HashMap::new(),
-            range_children: Vec::with_capacity(32), // Preallocate with initial size
+            range_children: Vec::with_capacity(32),
             cell_meta: HashMap::new(),
             rows,
             cols,
@@ -94,65 +84,48 @@ impl Spreadsheet {
             locked_ranges: Vec::new(),
             named_ranges: HashMap::new(),
             cell_history: HashMap::new(),
-            last_edited: None, // Initialize last_edited as None
+            last_edited: None,
         })
     }
 
-    // Helper to get cell key from coordinates
     pub fn get_key(&self, row: i16, col: i16) -> i32 {
         (row as i32 * self.cols as i32 + col as i32) as i32
     }
 
-    // Helper to get coordinates from cell key
     pub fn get_row_col(&self, key: i32) -> (i16, i16) {
         let row = (key / (self.cols as i32)) as i16;
         let col = (key % (self.cols as i32)) as i16;
         (row, col)
     }
 
-    // Helper to get index from row and column
     fn get_index(&self, row: i16, col: i16) -> usize {
         (row as usize) * (self.cols as usize) + (col as usize)
     }
 
-    // Get cell metadata, creating it if it doesn't exist
     pub fn get_cell_meta(&mut self, row: i16, col: i16) -> &mut CellMeta {
         let key = self.get_key(row, col);
         self.cell_meta.entry(key).or_insert_with(CellMeta::new)
     }
 
     pub fn get_column_name(&self, mut col: i16) -> String {
-        // Pre-calculate the length needed for the string
-        let mut temp_col = col + 1; // Convert from 0-based to 1-based
+        let mut temp_col = col + 1;
         let mut len = 0;
         while temp_col > 0 {
             len += 1;
             temp_col = (temp_col - 1) / 26;
         }
-
-        // Add column letters directly in reverse order
-        col += 1; // Convert from 0-based to 1-based
-
-        // Handle special case for col = 0
+        col += 1;
         if col == 0 {
             return "A".to_string();
         }
-
-        // Create a buffer of bytes to avoid repeated string operations
         let mut buffer = vec![0; len];
         let mut i = len;
-
         while col > 0 {
             i -= 1;
             buffer[i] = b'A' + ((col - 1) % 26) as u8;
             col = (col - 1) / 26;
         }
-
-        // Convert the byte buffer to a string in one operation
-        unsafe {
-            // This is safe because we know our bytes are valid ASCII from b'A' to b'Z'
-            String::from_utf8_unchecked(buffer)
-        }
+        unsafe { String::from_utf8_unchecked(buffer) }
     }
 
     pub fn column_name_to_index(&self, name: &str) -> i16 {
@@ -161,7 +134,7 @@ impl Spreadsheet {
         for &b in bytes {
             index = index * 26 + ((b - b'A') as i16 + 1);
         }
-        index - 1 // Convert from 1-based to 0-based
+        index - 1
     }
 
     pub fn get_cell(&self, row: i16, col: i16) -> &CellValue {
@@ -178,7 +151,6 @@ impl Spreadsheet {
         &mut self.grid[index]
     }
 
-    // Add a range-based child relationship
     pub fn add_range_child(&mut self, start_key: i32, end_key: i32, child_key: i32) {
         self.range_children.push(RangeChild {
             start_key,
@@ -187,41 +159,33 @@ impl Spreadsheet {
         });
     }
 
-    // Remove range-based child relationships for a given child
     pub fn remove_range_child(&mut self, child_key: i32) {
         self.range_children.retain(|rc| rc.child_key != child_key);
     }
 
-    // Check if a cell is within a range
     pub fn is_cell_in_range(&self, cell_key: i32, start_key: i32, end_key: i32) -> bool {
         let (cell_row, cell_col) = self.get_row_col(cell_key);
         let (start_row, start_col) = self.get_row_col(start_key);
         let (end_row, end_col) = self.get_row_col(end_key);
-
         cell_row >= start_row && cell_row <= end_row && cell_col >= start_col && cell_col <= end_col
     }
-    
-    // Add a child to a cell's dependents
+
     pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
         self.children
             .entry(*parent_key)
             .or_insert_with(|| Box::new(HashSet::with_capacity(5)))
             .insert(*child_key);
     }
-    
-    // Remove a child from a cell's dependents
+
     pub fn remove_child(&mut self, parent_key: i32, child_key: i32) {
         if let Some(children) = self.children.get_mut(&parent_key) {
             children.remove(&child_key);
-
-            // If the hashset is now empty, remove it from the HashMap to save memory
             if children.is_empty() {
                 self.children.remove(&parent_key);
             }
         }
     }
-      
-    // Get children for a cell (immutable)
+
     pub fn get_cell_children(&self, key: i32) -> Option<&HashSet<i32>> {
         self.children.get(&key).map(|boxed_set| boxed_set.as_ref())
     }
@@ -230,7 +194,38 @@ impl Spreadsheet {
         if !self.output_enabled {
             return;
         }
+        let start_row = self.viewport_row;
+        let start_col = self.viewport_col;
+        let display_row = min(self.rows - start_row, self.display_rows);
+        let display_col = min(self.cols - start_col, self.display_cols);
+        print!("     ");
+        for i in 0..display_col {
+            print!("{:<8} ", self.get_column_name(start_col + i));
+        }
+        println!();
+        for i in 0..display_row {
+            print!("{:<4} ", start_row + i + 1);
+            for j in 0..display_col {
+                let cell_value = self.get_cell(start_row + i, start_col + j);
+                let value_str = match cell_value {
+                    CellValue::Integer(value) => value.to_string(),
+                    CellValue::Error => "ERR".to_string(),
+                };
+                print!("{:<8.8} ", value_str); 
+            }
+            println!();
+        }
+    }
 
+    pub fn print_spreadsheet_with_highlights(
+        &self,
+        target_key: i32,
+        highlight_parents: &HashSet<i32>,
+        highlight_children: &HashSet<i32>,
+    ) {
+        if !self.output_enabled {
+            return;
+        }
         let start_row = self.viewport_row;
         let start_col = self.viewport_col;
         let display_row = min(self.rows - start_row, self.display_rows);
@@ -242,19 +237,95 @@ impl Spreadsheet {
             print!("{:<8} ", self.get_column_name(start_col + i));
         }
         println!();
-
-        // Print rows with data
+        
+        // Print rows with highlights
         for i in 0..display_row {
-            print!("{:<4} ", start_row + i + 1); // Show 1-based row numbers
+            print!("{:<4} ", start_row + i + 1);
             for j in 0..display_col {
-                let cell_value = self.get_cell(start_row + i, start_col + j);
-                match cell_value {
-                    CellValue::Integer(value) => print!("{:<8} ", value),
-                    CellValue::Error => print!("{:<8} ", "ERR"),
-                }
+                let row = start_row + i;
+                let col = start_col + j;
+                let key = self.get_key(row, col);
+                let cell_value = self.get_cell(row, col);
+                let value_str = match cell_value {
+                    CellValue::Integer(value) => value.to_string(),
+                    CellValue::Error => "ERR".to_string(),
+                };
+                
+                let display_str = if value_str.len() > 8 {
+                    &value_str[..8]
+                } else {
+                    value_str.as_str()
+                };
+                let padding = 8 - display_str.len();
+                let pre_padding = if j > 0 { 1 } else { 0 };
+                
+                // Apply highlights
+                let cell_str = if key == target_key {
+                    format!("\x1b[4m{}\x1b[0m", display_str) // Underline
+                } else if highlight_parents.contains(&key) {
+                    format!("\x1b[31m{}\x1b[0m", display_str) // Red for parents
+                } else if highlight_children.contains(&key) {
+                    format!("\x1b[32m{}\x1b[0m", display_str) // Green for children
+                } else {
+                    display_str.to_string()
+                };
+                
+                // Format with pre-padding, cell content, padding, and trailing space
+                let formatted = format!("{}{}{} ", " ".repeat(pre_padding), cell_str, " ".repeat(padding));
+                print!("{}", formatted);
             }
             println!();
         }
+    }
+
+    pub fn get_parents(&self, key: i32) -> HashSet<i32> {
+        let mut parents = HashSet::new();
+        if let Some(meta) = self.cell_meta.get(&key) {
+            let rem = meta.formula % 10;
+            if rem >= 5 && rem <= 9 {
+                let (start_row, start_col) = self.get_row_col(meta.parent1);
+                let (end_row, end_col) = self.get_row_col(meta.parent2);
+                for r in start_row..=end_row {
+                    for c in start_col..=end_col {
+                        let pkey = self.get_key(r, c);
+                        parents.insert(pkey);
+                    }
+                }
+            } else if rem == 0 {
+                if meta.parent1 >= 0 {
+                    parents.insert(meta.parent1);
+                }
+                if meta.parent2 >= 0 {
+                    parents.insert(meta.parent2);
+                }
+            } else if rem == 2 {
+                if meta.parent1 >= 0 {
+                    parents.insert(meta.parent1);
+                }
+            } else if rem == 3 {
+                if meta.parent2 >= 0 {
+                    parents.insert(meta.parent2);
+                }
+            } else if meta.formula == 82 || meta.formula == 102 {
+                if meta.parent1 >= 0 {
+                    parents.insert(meta.parent1);
+                }
+            }
+        }
+        parents
+    }
+
+    pub fn get_children(&self, key: i32) -> HashSet<i32> {
+        let mut children = HashSet::new();
+        if let Some(direct_children) = self.get_cell_children(key) {
+            children.extend(direct_children);
+        }
+        for range_child in &self.range_children {
+            if self.is_cell_in_range(key, range_child.start_key, range_child.end_key) {
+                children.insert(range_child.child_key);
+            }
+        }
+        children
     }
 
     pub fn scroll_to_cell(&mut self, cell: &str) -> CommandStatus {
@@ -268,9 +339,7 @@ impl Spreadsheet {
                     return CommandStatus::CmdInvalidCell;
                 }
             }
-            Err(_) => {
-                return CommandStatus::CmdUnrecognized;
-            }
+            Err(_) => CommandStatus::CmdUnrecognized,
         }
     }
 
@@ -305,7 +374,7 @@ impl Spreadsheet {
                     self.viewport_col = self.cols - VIEWPORT_SIZE;
                 }
             }
-            _ => {} // Invalid direction, do nothing
+            _ => {}
         }
     }
 
@@ -319,23 +388,17 @@ impl Spreadsheet {
 
     pub fn is_cell_locked(&self, row: i16, col: i16) -> bool {
         for range in &self.locked_ranges {
-            if row >= range.start_row
-                && row <= range.end_row
-                && col >= range.start_col
-                && col <= range.end_col
-            {
+            if row >= range.start_row && row <= range.end_row && col >= range.start_col && col <= range.end_col {
                 return true;
             }
         }
         false
     }
 
-    // Set the last edited cell coordinates
     pub fn set_last_edited(&mut self, row: i16, col: i16) {
         self.last_edited = Some((row, col));
     }
 
-    // Scroll the viewport to the last edited cell
     pub fn scroll_to_last_edited(&mut self) {
         if let Some((row, col)) = self.last_edited {
             self.viewport_row = row;
@@ -471,7 +534,7 @@ mod tests {
     fn test_print_spreadsheet_disabled() {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
         sheet.output_enabled = false;
-        sheet.print_spreadsheet(); // Should not panic
+        sheet.print_spreadsheet();
     }
 
     #[test]
@@ -480,7 +543,7 @@ mod tests {
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(42);
         *sheet.get_mut_cell(1, 1) = CellValue::Error;
         sheet.output_enabled = true;
-        sheet.print_spreadsheet(); // Should not panic
+        sheet.print_spreadsheet();
     }
 
     #[test]
