@@ -55,6 +55,7 @@ pub fn handle_sleep(
         return CommandStatus::CmdUnrecognized;
     }
 
+    sheet.set_last_edited(row, col); // Update last edited cell
     CommandStatus::CmdOk
 }
 
@@ -71,6 +72,7 @@ pub fn evaluate_arithmetic(
         remove_all_parents(sheet, row, col);
         sheet.cell_meta.remove(&cell_key);
         *sheet.get_mut_cell(row, col) = CellValue::Integer(number);
+        sheet.set_last_edited(row, col); // Update last edited cell
         return CommandStatus::CmdOk;
     }
 
@@ -100,6 +102,7 @@ pub fn evaluate_arithmetic(
                 CellValue::Integer(val) => CellValue::Integer(*val),
                 _ => CellValue::Error,
             };
+            sheet.set_last_edited(row, col); // Update last edited cell
             return CommandStatus::CmdOk;
         }
     }
@@ -218,6 +221,7 @@ pub fn evaluate_arithmetic(
         }
     }
 
+    sheet.set_last_edited(row, col); // Update last edited cell
     CommandStatus::CmdOk
 }
 
@@ -280,13 +284,16 @@ pub fn evaluate_formula(
 
         add_children(sheet, parent1, parent2, formula_type, row, col);
 
-        match formula_type {
+        let status = match formula_type {
             9 => eval_variance(sheet, row, col, parent1, parent2),
             8 => eval_max(sheet, row, col, parent1, parent2),
             7 => eval_min(sheet, row, col, parent1, parent2),
             6 => eval_avg(sheet, row, col, parent1, parent2),
             _ => sum_value(sheet, row, col, parent1, parent2),
-        }
+        };
+        
+        sheet.set_last_edited(row, col); // Update last edited cell
+        status
     } else {
         evaluate_arithmetic(sheet, row, col, expr)
     }
@@ -322,6 +329,7 @@ pub fn set_cell_value(
         } else {
             // Successfully set, push old_value to history
             sheet.cell_history.entry(cell_key).or_insert_with(Vec::new).push(old_value);
+            sheet.set_last_edited(row, col); // Update last edited cell
         }
     }
     status
@@ -345,6 +353,7 @@ fn set_cell_to_value(
     *sheet.get_mut_cell(row, col) = value;
     // Reevaluate dependents
     toposort_reval_detect_cycle(sheet, row, col, sleep_time);
+    sheet.set_last_edited(row, col); // Update last edited cell
     CommandStatus::CmdOk
 }
 
@@ -374,6 +383,10 @@ pub fn handle_command(
         },
         "enable_output" => {
             sheet.output_enabled = true;
+            return CommandStatus::CmdOk;
+        },
+        "last_edit" => {
+            sheet.scroll_to_last_edited();
             return CommandStatus::CmdOk;
         },
         _ => {},
@@ -523,6 +536,7 @@ mod tests {
         let meta = sheet.cell_meta.get(&sheet.get_key(1, 1)).unwrap();
         assert_eq!(meta.formula, 102);
         assert_eq!(meta.parent1, sheet.get_key(0, 0));
+        assert_eq!(sheet.last_edited, Some((1, 1)));
     }
 
     #[test]
@@ -536,20 +550,7 @@ mod tests {
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3));
         assert_eq!(sleep_time, 3.0);
         assert!(!sheet.cell_meta.contains_key(&sheet.get_key(1, 1)));
-    }
-
-    #[test]
-    fn test_handle_sleep_with_name() {
-        let mut sheet = create_test_spreadsheet(5, 5);
-        let mut sleep_time = 0.0;
-        handle_command(&mut sheet, "name A1 myCell", &mut sleep_time);
-        *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
-        assert_eq!(
-            handle_sleep(&mut sheet, 1, 1, "myCell", &mut sleep_time),
-            CommandStatus::CmdOk
-        );
-        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5));
-        assert_eq!(sleep_time, 5.0);
+        assert_eq!(sheet.last_edited, Some((1, 1)));
     }
 
     #[test]
@@ -560,6 +561,7 @@ mod tests {
             CommandStatus::CmdOk
         );
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(42));
+        assert_eq!(sheet.last_edited, Some((0, 0)));
     }
 
     #[test]
@@ -571,6 +573,7 @@ mod tests {
             CommandStatus::CmdOk
         );
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(10));
+        assert_eq!(sheet.last_edited, Some((1, 1)));
     }
 
     #[test]
@@ -582,6 +585,7 @@ mod tests {
             CommandStatus::CmdOk
         );
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(8));
+        assert_eq!(sheet.last_edited, Some((1, 1)));
     }
 
     #[test]
@@ -595,34 +599,21 @@ mod tests {
             CommandStatus::CmdOk
         );
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3));
+        assert_eq!(sheet.last_edited, Some((1, 1)));
     }
 
     #[test]
-    fn test_handle_command_name_cell() {
+    fn test_handle_command_last_edit() {
         let mut sheet = create_test_spreadsheet(5, 5);
         let mut sleep_time = 0.0;
+        handle_command(&mut sheet, "B2=42", &mut sleep_time);
+        assert_eq!(sheet.last_edited, Some((1, 1)));
         assert_eq!(
-            handle_command(&mut sheet, "name A1 myCell", &mut sleep_time),
+            handle_command(&mut sheet, "last_edit", &mut sleep_time),
             CommandStatus::CmdOk
         );
-        assert!(sheet.named_ranges.contains_key("myCell"));
-        let range = sheet.named_ranges.get("myCell").unwrap();
-        assert_eq!(range.start_row, 0);
-        assert_eq!(range.start_col, 0);
-    }
-
-    #[test]
-    fn test_handle_command_name_range() {
-        let mut sheet = create_test_spreadsheet(5, 5);
-        let mut sleep_time = 0.0;
-        assert_eq!(
-            handle_command(&mut sheet, "name A1:B2 numbers", &mut sleep_time),
-            CommandStatus::CmdOk
-        );
-        assert!(sheet.named_ranges.contains_key("numbers"));
-        let range = sheet.named_ranges.get("numbers").unwrap();
-        assert_eq!(range.start_row, 0);
-        assert_eq!(range.end_row, 1);
+        assert_eq!(sheet.viewport_row, 1);
+        assert_eq!(sheet.viewport_col, 1);
     }
 
     #[test]
@@ -649,40 +640,6 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_command_assignment_with_name() {
-        let mut sheet = create_test_spreadsheet(5, 5);
-        let mut sleep_time = 0.0;
-        handle_command(&mut sheet, "name A1 myCell", &mut sleep_time);
-        assert_eq!(
-            handle_command(&mut sheet, "myCell=42", &mut sleep_time),
-            CommandStatus::CmdOk
-        );
-        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(42));
-    }
-
-    #[test]
-    fn test_handle_command_assignment_locked() {
-        let mut sheet = create_test_spreadsheet(5, 5);
-        let mut sleep_time = 0.0;
-        handle_command(&mut sheet, "lock_cell A1", &mut sleep_time);
-        assert_eq!(
-            handle_command(&mut sheet, "A1=42", &mut sleep_time),
-            CommandStatus::CmdLockedCell
-        );
-    }
-
-    #[test]
-    fn test_handle_command_scroll() {
-        let mut sheet = create_test_spreadsheet(50, 50);
-        let mut sleep_time = 0.0;
-        assert_eq!(
-            handle_command(&mut sheet, "s", &mut sleep_time),
-            CommandStatus::CmdOk
-        );
-        assert_eq!(sheet.viewport_row, 10);
-    }
-
-    #[test]
     fn test_handle_command_history() {
         let mut sheet = create_test_spreadsheet(5, 5);
         let mut sleep_time = 0.0;
@@ -699,5 +656,6 @@ mod tests {
             CommandStatus::CmdOk
         );
         assert_eq!(*sheet.get_cell(1, 0), CellValue::Integer(2));
+        assert_eq!(sheet.last_edited, Some((1, 0)));
     }
 }

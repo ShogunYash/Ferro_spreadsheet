@@ -59,8 +59,9 @@ pub struct Spreadsheet {
     pub display_rows: i16,
     pub display_cols: i16,
     pub locked_ranges: Vec<Range>,
-    pub named_ranges: HashMap<String, Range>, // New field for named ranges
-    pub cell_history: HashMap<i32, Vec<CellValue>>, // New field for cell history
+    pub named_ranges: HashMap<String, Range>,                // Field for named ranges
+    pub cell_history: HashMap<i32, Vec<CellValue>>,          // Field for cell history
+    pub last_edited: Option<(i16, i16)>,                     // New field for last edited cell (row, col)
 }
 
 impl Spreadsheet {
@@ -89,7 +90,8 @@ impl Spreadsheet {
             display_cols: 10,
             locked_ranges: Vec::new(),
             named_ranges: HashMap::new(),
-            cell_history: HashMap::new(), // Initialize cell_history
+            cell_history: HashMap::new(),
+            last_edited: None, // Initialize last_edited as None
         })
     }
 
@@ -322,6 +324,19 @@ impl Spreadsheet {
         }
         false
     }
+
+    // Set the last edited cell coordinates
+    pub fn set_last_edited(&mut self, row: i16, col: i16) {
+        self.last_edited = Some((row, col));
+    }
+
+    // Scroll the viewport to the last edited cell
+    pub fn scroll_to_last_edited(&mut self) {
+        if let Some((row, col)) = self.last_edited {
+            self.viewport_row = row;
+            self.viewport_col = col;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -461,5 +476,16 @@ mod tests {
         *sheet.get_mut_cell(1, 1) = CellValue::Error;
         sheet.output_enabled = true;
         sheet.print_spreadsheet(); // Should not panic
+    }
+
+    #[test]
+    fn test_last_edited() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        assert_eq!(sheet.last_edited, None);
+        sheet.set_last_edited(2, 3);
+        assert_eq!(sheet.last_edited, Some((2, 3)));
+        sheet.scroll_to_last_edited();
+        assert_eq!(sheet.viewport_row, 2);
+        assert_eq!(sheet.viewport_col, 3);
     }
 }
