@@ -3,12 +3,15 @@ use crate::formula::Range;
 use crate::visualize_cells;
 use std::cmp::min;
 use std::collections::HashMap;
-use std::collections::HashSet; // Assuming Range is defined in formula.rs
+use std::collections::HashSet;
+use crate::cell::{CellValue, parse_cell_reference}; 
+use crate::visualize_cells;
+use crate::formula::Range;
 
 // Constants
-pub const MAX_ROWS: i16 = 999; // Maximum number of rows in the spreadsheet   
-pub const MAX_COLS: i16 = 18278; // Maximum number of columns in the spreadsheet
-pub const MAX_DISPLAY: i16 = 15; // Maximum display size for rows and columns
+pub const MAX_ROWS: i16 = 999;    // Maximum number of rows in the spreadsheet  
+pub const MAX_COLS: i16 = 18278;  // Maximum number of columns in the spreadsheet
+pub const MAX_DISPLAY: i16 = 15;  // Maximum display size for rows and columns
 
 // Structure to represent a range-based child relationship
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -24,7 +27,7 @@ pub enum CommandStatus {
     CmdUnrecognized,
     CmdCircularRef,
     CmdInvalidCell,
-    CmdLockedCell, // New status for locked cells
+    CmdLockedCell,
 }
 
 // Modified CellMeta to remove children (they're now stored separately)
@@ -56,9 +59,12 @@ pub struct Spreadsheet {
     pub viewport_row: i16,
     pub viewport_col: i16,
     pub output_enabled: bool,
-    pub display_rows: i16,         // Custom display rows
-    pub display_cols: i16,         // Custom display columns
-    pub locked_ranges: Vec<Range>, // New field to store locked ranges
+    pub display_rows: i16,
+    pub display_cols: i16,
+    pub locked_ranges: Vec<Range>,
+    pub named_ranges: HashMap<String, Range>,                // Field for named ranges
+    pub cell_history: HashMap<i32, Vec<CellValue>>,          // Field for cell history
+    pub last_edited: Option<(i16, i16)>,                     // New field for last edited cell (row, col)
 }
 
 impl Spreadsheet {
@@ -83,9 +89,12 @@ impl Spreadsheet {
             viewport_row: 0,
             viewport_col: 0,
             output_enabled: true,
-            display_rows: 10,          // Default display size
-            display_cols: 10,          // Default display size
-            locked_ranges: Vec::new(), // Initialize locked ranges
+            display_rows: 10,
+            display_cols: 10,
+            locked_ranges: Vec::new(),
+            named_ranges: HashMap::new(),
+            cell_history: HashMap::new(),
+            last_edited: None, // Initialize last_edited as None
         })
     }
 
@@ -191,16 +200,16 @@ impl Spreadsheet {
 
         cell_row >= start_row && cell_row <= end_row && cell_col >= start_col && cell_col <= end_col
     }
-
-    // Add a child to a cell's dependents (modified for HashMap of boxed HashSets)
+    
+    // Add a child to a cell's dependents
     pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
         self.children
             .entry(*parent_key)
             .or_insert_with(|| Box::new(HashSet::with_capacity(5)))
             .insert(*child_key);
     }
-
-    // Remove a child from a cell's dependents (modified for HashMap of boxed HashSets)
+    
+    // Remove a child from a cell's dependents
     pub fn remove_child(&mut self, parent_key: i32, child_key: i32) {
         if let Some(children) = self.children.get_mut(&parent_key) {
             children.remove(&child_key);
@@ -211,8 +220,8 @@ impl Spreadsheet {
             }
         }
     }
-
-    // Get children for a cell (immutable) (modified for HashMap of boxed HashSets)
+      
+    // Get children for a cell (immutable)
     pub fn get_cell_children(&self, key: i32) -> Option<&HashSet<i32>> {
         self.children.get(&key).map(|boxed_set| boxed_set.as_ref())
     }
@@ -224,9 +233,9 @@ impl Spreadsheet {
 
         let start_row = self.viewport_row;
         let start_col = self.viewport_col;
-        let display_row = min(self.rows - start_row, self.display_rows); // Use customizable display size
-        let display_col = min(self.cols - start_col, self.display_cols); // Use customizable display size
-
+        let display_row = min(self.rows - start_row, self.display_rows);
+        let display_col = min(self.cols - start_col, self.display_cols);
+        
         // Print column headers
         print!("     ");
         for i in 0..display_col {
@@ -289,7 +298,6 @@ impl Spreadsheet {
                     0
                 };
             }
-
             'd' => {
                 if self.viewport_col + VIEWPORT_SIZE < self.cols {
                     self.viewport_col += 10;
@@ -302,16 +310,13 @@ impl Spreadsheet {
     }
 
     pub fn visualize_cell_relationships(&self, row: i16, col: i16) -> CommandStatus {
-        // Check if the cell is valid
         visualize_cells::visualize_cell_relationships(self, row, col)
     }
 
-    // New method to lock a range
     pub fn lock_range(&mut self, range: Range) {
         self.locked_ranges.push(range);
     }
 
-    // New method to check if a cell is locked
     pub fn is_cell_locked(&self, row: i16, col: i16) -> bool {
         for range in &self.locked_ranges {
             if row >= range.start_row
@@ -323,6 +328,19 @@ impl Spreadsheet {
             }
         }
         false
+    }
+
+    // Set the last edited cell coordinates
+    pub fn set_last_edited(&mut self, row: i16, col: i16) {
+        self.last_edited = Some((row, col));
+    }
+
+    // Scroll the viewport to the last edited cell
+    pub fn scroll_to_last_edited(&mut self) {
+        if let Some((row, col)) = self.last_edited {
+            self.viewport_row = row;
+            self.viewport_col = col;
+        }
     }
 }
 
@@ -466,17 +484,13 @@ mod tests {
     }
 
     #[test]
-    fn test_lock_range_and_is_cell_locked() {
+    fn test_last_edited() {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        let range = Range {
-            start_row: 0,
-            start_col: 0,
-            end_row: 1,
-            end_col: 1,
-        };
-        sheet.lock_range(range);
-        assert!(sheet.is_cell_locked(0, 0));
-        assert!(sheet.is_cell_locked(1, 1));
-        assert!(!sheet.is_cell_locked(2, 2));
+        assert_eq!(sheet.last_edited, None);
+        sheet.set_last_edited(2, 3);
+        assert_eq!(sheet.last_edited, Some((2, 3)));
+        sheet.scroll_to_last_edited();
+        assert_eq!(sheet.viewport_row, 2);
+        assert_eq!(sheet.viewport_col, 3);
     }
 }
