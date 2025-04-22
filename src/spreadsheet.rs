@@ -267,7 +267,7 @@ impl Spreadsheet {
                 };
             }
             's' => {
-                if self.viewport_row + VIEWPORT_SIZE < self.rows {
+                if self.viewport_row + VIEWPORT_SIZE < self.rows - 9 {
                     self.viewport_row += 10;
                 } else {
                     self.viewport_row = self.rows - VIEWPORT_SIZE;
@@ -282,7 +282,7 @@ impl Spreadsheet {
             }
 
             'd' => {
-                if self.viewport_col + VIEWPORT_SIZE < self.cols {
+                if self.viewport_col + VIEWPORT_SIZE < self.cols - 9 {
                     self.viewport_col += 10;
                 } else {
                     self.viewport_col = self.cols - VIEWPORT_SIZE;
