@@ -3,7 +3,149 @@ use crate::formula::parse_range;
 use crate::formula::{eval_avg, eval_max, eval_min, eval_variance, sum_value};
 use crate::graph::{add_children, remove_all_parents};
 use crate::reevaluate_topo::{sleep_fn, toposort_reval_detect_cycle};
-use crate::spreadsheet::{CommandStatus, Spreadsheet};
+use crate::spreadsheet::{CommandStatus, Spreadsheet, MAX_DISPLAY};
+use crate::formula::Range;
+
+fn resolve_cell_reference(sheet: &Spreadsheet, s: &str) -> Result<(i16, i16), CommandStatus> {
+    if let Some(range) = sheet.named_ranges.get(s) {
+        if range.start_row == range.end_row && range.start_col == range.end_col {
+            Ok((range.start_row, range.start_col))
+        } else {
+            Err(CommandStatus::CmdUnrecognized)
+        }
+    } else {
+        parse_cell_reference(sheet, s)
+    }
+}
+
+fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
+    let meta = sheet.get_cell_meta_ref(row, col);
+    if meta.formula == -1 {
+        return "No formula".to_string();
+    }
+    let rem = meta.formula % 10;
+    let msb = meta.formula / 10;
+    let parent1 = meta.parent1;
+    let parent2 = meta.parent2;
+
+    match rem {
+        0 => {
+            let (left, right) = if parent1 >= 0 && parent2 >= 0 {
+                // Check if parent1 and parent2 are literals (not cell references)
+                let is_literal1 = parent1 < (sheet.rows as i32 * sheet.cols as i32) && parent1 >= 0;
+                let is_literal2 = parent2 < (sheet.rows as i32 * sheet.cols as i32) && parent2 >= 0;
+
+                if is_literal1 && is_literal2 {
+                    (parent1.to_string(), parent2.to_string())
+                } else if is_literal1 {
+                    let (right_row, right_col) = sheet.get_row_col(parent2);
+                    let right_name = sheet.get_cell_name(right_row, right_col);
+                    (parent1.to_string(), right_name)
+                } else if is_literal2 {
+                    let (left_row, left_col) = sheet.get_row_col(parent1);
+                    let left_name = sheet.get_cell_name(left_row, left_col);
+                    (left_name, parent2.to_string())
+                } else {
+                    let (left_row, left_col) = sheet.get_row_col(parent1);
+                    let (right_row, right_col) = sheet.get_row_col(parent2);
+                    let left_name = sheet.get_cell_name(left_row, left_col);
+                    let right_name = sheet.get_cell_name(right_row, right_col);
+                    (left_name, right_name)
+                }
+            } else {
+                return "Invalid formula".to_string();
+            };
+            match msb {
+                1 => format!("{} + {}", left, right),
+                2 => format!("{} - {}", left, right),
+                4 => format!("{} * {}", left, right),
+                3 => format!("{} / {}", left, right),
+                _ => "Unknown operation".to_string(),
+            }
+        }
+        2 => {
+            let (left, right) = if parent1 >= 0 {
+                let (left_row, left_col) = sheet.get_row_col(parent1);
+                let left_name = sheet.get_cell_name(left_row, left_col);
+                (left_name, parent2.to_string())
+            } else {
+                return "Invalid formula".to_string();
+            };
+            match msb {
+                1 => format!("{} + {}", left, right),
+                2 => format!("{} - {}", left, right),
+                4 => format!("{} * {}", left, right),
+                3 => format!("{} / {}", left, right),
+                10 => format!("SLEEP({})", left),
+                _ => "Unknown operation".to_string(),
+            }
+        }
+        3 => {
+            let (left, right) = if parent2 >= 0 {
+                let (right_row, right_col) = sheet.get_row_col(parent2);
+                let right_name = sheet.get_cell_name(right_row, right_col);
+                (parent1.to_string(), right_name)
+            } else {
+                return "Invalid formula".to_string();
+            };
+            match msb {
+                1 => format!("{} + {}", left, right),
+                2 => format!("{} - {}", left, right),
+                4 => format!("{} * {}", left, right),
+                3 => format!("{} / {}", left, right),
+                _ => "Unknown operation".to_string(),
+            }
+        }
+        5 => {
+            let (start_row, start_col) = sheet.get_row_col(parent1);
+            let (end_row, end_col) = sheet.get_row_col(parent2);
+            let start_name = sheet.get_cell_name(start_row, start_col);
+            let end_name = sheet.get_cell_name(end_row, end_col);
+            format!("SUM({}:{})", start_name, end_name)
+        }
+        6 => {
+            let (start_row, start_col) = sheet.get_row_col(parent1);
+            let (end_row, end_col) = sheet.get_row_col(parent2);
+            let start_name = sheet.get_cell_name(start_row, start_col);
+            let end_name = sheet.get_cell_name(end_row, end_col);
+            format!("AVG({}:{})", start_name, end_name)
+        }
+        7 => {
+            let (start_row, start_col) = sheet.get_row_col(parent1);
+            let (end_row, end_col) = sheet.get_row_col(parent2);
+            let start_name = sheet.get_cell_name(start_row, start_col);
+            let end_name = sheet.get_cell_name(end_row, end_col);
+            format!("MIN({}:{})", start_name, end_name)
+        }
+        8 => {
+            let (start_row, start_col) = sheet.get_row_col(parent1);
+            let (end_row, end_col) = sheet.get_row_col(parent2);
+            let start_name = sheet.get_cell_name(start_row, start_col);
+            let end_name = sheet.get_cell_name(end_row, end_col);
+            format!("MAX({}:{})", start_name, end_name)
+        }
+        9 => {
+            let (start_row, start_col) = sheet.get_row_col(parent1);
+            let (end_row, end_col) = sheet.get_row_col(parent2);
+            let start_name = sheet.get_cell_name(start_row, start_col);
+            let end_name = sheet.get_cell_name(end_row, end_col);
+            format!("STDEV({}:{})", start_name, end_name)
+        }
+        _ => {
+            if meta.formula == 82 {
+                let (left_row, left_col) = sheet.get_row_col(parent1);
+                let left_name = sheet.get_cell_name(left_row, left_col);
+                left_name
+            } else if meta.formula == 102 {
+                let (left_row, left_col) = sheet.get_row_col(parent1);
+                let left_name = sheet.get_cell_name(left_row, left_col);
+                format!("SLEEP({})", left_name)
+            } else {
+                "Unknown formula".to_string()
+            }
+        }
+    }
+}
 
 pub fn handle_sleep(
     sheet: &mut Spreadsheet,
@@ -89,7 +231,7 @@ pub fn evaluate_arithmetic(
     }
 
     if all_alnum {
-        match parse_cell_reference(sheet, expr) {
+        match resolve_cell_reference(sheet, expr) {
             Ok((target_row, target_col)) => {
                 // Get reference cell key and value
                 let ref_cell_key = sheet.get_key(target_row, target_col);
@@ -111,6 +253,7 @@ pub fn evaluate_arithmetic(
                     CellValue::Integer(val) => CellValue::Integer(*val),
                     _ => CellValue::Error,
                 };
+
                 return CommandStatus::CmdOk;
             }
             Err(status) => return status,
@@ -329,9 +472,13 @@ pub fn evaluate_formula(
         let range_str: &str = &expr[prefix_len..expr.len() - 1];
 
         // Parse range and validate early to avoid unnecessary work
-        let range = match parse_range(sheet, range_str) {
-            Ok(r) => r,
-            Err(status) => return status,
+        let range: Range = if let Some(named_range) = sheet.named_ranges.get(range_str) {
+            named_range.clone()
+        } else {
+            match parse_range(sheet, range_str) {
+                Ok(r) => r,
+                Err(status) => return status,
+            }
         };
 
         // let cell_key = sheet.get_key(row, col);
@@ -367,7 +514,13 @@ pub fn set_cell_value(
     expr: &str,
     sleep_time: &mut f64,
 ) -> CommandStatus {
-    let old_meta = sheet.cell_meta.get(&sheet.get_key(row, col)).cloned();
+    if sheet.is_cell_locked(row, col) {
+        return CommandStatus::CmdLockedCell;
+    }
+    let cell_key = sheet.get_key(row, col);
+
+    // Save old state
+    let old_meta = sheet.cell_meta.get(&cell_key).cloned();
     let old_value = match sheet.get_cell(row, col) {
         CellValue::Integer(val) => CellValue::Integer(*val),
         _ => CellValue::Error,
@@ -386,16 +539,42 @@ pub fn set_cell_value(
             // Old meta
             if let Some(old) = old_meta {
                 let (parent1, parent2, formula) = (old.parent1, old.parent2, old.formula);
-                sheet.cell_meta.insert(sheet.get_key(row, col), old);
+                sheet.cell_meta.insert(cell_key, old);
                 add_children(sheet, parent1, parent2, formula, row, col);
             } else {
-                sheet.cell_meta.remove(&sheet.get_key(row, col));
+                sheet.cell_meta.remove(&cell_key);
             }
 
             return CommandStatus::CmdCircularRef;
+        } else {
+            // If no cycle, update the cell history with the old value
+            sheet.cell_history.entry(cell_key).or_insert_with(Vec::new).push(old_value);
+            sheet.set_last_edited(row, col);
         }
     }
     status
+}
+
+fn set_cell_to_value(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    value: CellValue,
+    sleep_time: &mut f64
+) -> CommandStatus {
+    // Check if the cell is locked before setting the value
+        if sheet.is_cell_locked(row, col) {
+            return CommandStatus::CmdLockedCell;
+        }
+        // Check if the value is a valid integer
+        let cell_key = sheet.get_key(row, col);
+        // remove all parents and set the value                                             
+        remove_all_parents(sheet, row, col);
+        sheet.cell_meta.remove(&cell_key);
+        *sheet.get_mut_cell(row, col) = value;
+        toposort_reval_detect_cycle(sheet, row, col, sleep_time);
+        sheet.set_last_edited(row, col);
+        CommandStatus::CmdOk
 }
 
 pub fn handle_command(
@@ -427,6 +606,10 @@ pub fn handle_command(
             sheet.output_enabled = true;
             return CommandStatus::CmdOk;
         }
+        "last_edit" => {
+            sheet.scroll_to_last_edited();
+            return CommandStatus::CmdOk;
+        }
         _ => {}
     }
 
@@ -450,6 +633,98 @@ pub fn handle_command(
     {
         let cell_ref = &trimmed[10..];
         return sheet.scroll_to_cell(cell_ref);
+    }
+
+    if trimmed.starts_with("display ") {
+        let num_str = trimmed.get(8..).unwrap_or("").trim();
+        match num_str.parse::<i16>() {
+            Ok(num) if num > 0 && num <= MAX_DISPLAY => {
+                sheet.display_rows = num;
+                sheet.display_cols = num;
+                return CommandStatus::CmdOk;
+            }
+            _ => return CommandStatus::CmdUnrecognized,
+        }
+    }
+
+    if trimmed.starts_with("lock_cell ") {
+        let lock_target = trimmed.get(10..).unwrap_or("").trim();
+        if lock_target.contains(':') {
+            match parse_range(sheet, lock_target) {
+                Ok(range) => {
+                    sheet.lock_range(range);
+                    return CommandStatus::CmdOk;
+                }
+                Err(_) => return CommandStatus::CmdUnrecognized,
+            }
+        } else {
+            match resolve_cell_reference(sheet, lock_target) {
+                Ok((row, col)) => {
+                    let range = Range {
+                        start_row: row,
+                        start_col: col,
+                        end_row: row,
+                        end_col: col,
+                    };
+                    sheet.lock_range(range);
+                    return CommandStatus::CmdOk;
+                }
+                Err(status) => return status,
+            }
+        }
+    }
+
+    if trimmed.starts_with("name ") {
+        let parts: Vec<&str> = trimmed[5..].split_whitespace().collect();
+        if parts.len() == 2 {
+            let target = parts[0];
+            let name = parts[1];
+            if let Ok(range) = parse_range(sheet, target) {
+                sheet.named_ranges.insert(name.to_string(), range);
+                return CommandStatus::CmdOk;
+            } else if let Ok((row, col)) = parse_cell_reference(sheet, target) {
+                let range = Range {
+                    start_row: row,
+                    start_col: col,
+                    end_row: row,
+                    end_col: col,
+                };
+                sheet.named_ranges.insert(name.to_string(), range);
+                return CommandStatus::CmdOk;
+            }
+        }
+        return CommandStatus::CmdUnrecognized;
+    }
+
+    if trimmed.starts_with("history ") {
+        let cell_ref = trimmed[8..].trim();
+        return match resolve_cell_reference(sheet, cell_ref) {
+            Ok((row, col)) => {
+                let cell_key = sheet.get_key(row, col);
+                if let Some(history) = sheet.cell_history.get_mut(&cell_key) {
+                    if let Some(prev_value) = history.pop() {
+                        set_cell_to_value(sheet, row, col, prev_value, sleep_time)
+                    } else {
+                        CommandStatus::CmdOk
+                    }
+                } else {
+                    CommandStatus::CmdOk
+                }
+            }
+            Err(status) => status,
+        };
+    }
+
+    if trimmed.starts_with("formula ") {
+        let cell_ref = trimmed[8..].trim();
+        match resolve_cell_reference(sheet, cell_ref) {
+            Ok((row, col)) => {
+                let formula_str = get_formula_string(sheet, row, col);
+                println!("{}", formula_str);
+                return CommandStatus::CmdOk;
+            }
+            Err(status) => return status,
+        }
     }
 
     // Check for cell assignment using byte search for '='
@@ -694,4 +969,86 @@ mod tests {
         );
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(42));
     }
+
+    #[test]
+    fn test_set_cell_value_circular_ref() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            set_cell_value(&mut sheet, 0, 0, "A1", &mut sleep_time),
+            CommandStatus::CmdCircularRef
+        );
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
+    }
+
+    #[test]
+    fn test_handle_command_last_edit() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        handle_command(&mut sheet, "B2=42", &mut sleep_time);
+        assert_eq!(sheet.last_edited, Some((1, 1)));
+        assert_eq!(
+            handle_command(&mut sheet, "last_edit", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.viewport_row, 1);
+        assert_eq!(sheet.viewport_col, 1);
+    }
+
+    #[test]
+    fn test_handle_command_display() {
+        let mut sheet = create_test_spreadsheet(20, 20);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "display 5", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.display_rows, 5);
+        assert_eq!(sheet.display_cols, 5);
+    }
+
+    #[test]
+    fn test_handle_command_lock_cell() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "lock_cell B2", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert!(sheet.is_cell_locked(1, 1));
+    }
+
+    #[test]
+    fn test_handle_command_history() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "A2=2", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(
+            handle_command(&mut sheet, "A2=3", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(
+            handle_command(&mut sheet, "history A2", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 0), CellValue::Integer(2));
+        assert_eq!(sheet.last_edited, Some((1, 0)));
+    }
+
+    #[test]
+    fn test_evaluate_formula_max() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(3);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "MAX(A1:B1)", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5));
+    }
+
 }
