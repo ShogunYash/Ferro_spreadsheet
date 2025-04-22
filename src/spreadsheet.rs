@@ -10,6 +10,14 @@ const MAX_ROWS: i16 = 999; // Maximum number of rows in the spreadsheet
 const MAX_COLS: i16 = 18278; // Maximum number of columns in the spreadsheet
 pub const MAX_DISPLAY: i16 = 15;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum HighlightType {
+    Parent,
+    Child,
+    Both,
+    None,
+}
+
 // Structure to represent a range-based child relationship
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RangeChild {
@@ -56,12 +64,12 @@ pub struct Spreadsheet {
     pub viewport_row: i16,
     pub viewport_col: i16,
     pub output_enabled: bool,
-    pub display_rows: i16,
-    pub display_cols: i16,
     pub locked_ranges: Vec<Range>,
     pub named_ranges: HashMap<String, Range>,
     pub cell_history: HashMap<i32, Vec<CellValue>>,
     pub last_edited: Option<(i16, i16)>,
+    pub highlight_cell: i32,
+    pub highlight_type: HighlightType,
 }
 
 impl Spreadsheet {
@@ -86,12 +94,12 @@ impl Spreadsheet {
             viewport_row: 0,
             viewport_col: 0,
             output_enabled: true,
-            display_rows: 10,
-            display_cols: 10,
             locked_ranges: Vec::new(),
             named_ranges: HashMap::new(),
             cell_history: HashMap::new(),
             last_edited: None,
+            highlight_cell: -1,
+            highlight_type: HighlightType::None,
         })
     }
 
@@ -232,8 +240,141 @@ impl Spreadsheet {
         self.children.get(&key).map(|boxed_set| boxed_set.as_ref())
     }
 
+    pub fn set_highlight(&mut self, row: i16, col: i16, highlight_type: HighlightType) {
+        self.highlight_cell = self.get_key(row, col);
+        self.highlight_type = highlight_type;
+    }
+
+    pub fn disable_highlight(&mut self) {
+        self.highlight_cell = -1;
+        self.highlight_type = HighlightType::None;
+    }
+
+
+    pub fn is_highlighted(&self, cell_key: i32) -> (bool, HighlightType) {
+        if self.highlight_cell == -1 || self.highlight_type == HighlightType::None {
+            return (false, HighlightType::None);
+        }
+    
+        // Check if it's a parent of the highlighted cell
+        let meta = self.cell_meta.get(&self.highlight_cell);
+        if let Some(meta) = meta {
+            if self.highlight_type == HighlightType::Parent || self.highlight_type == HighlightType::Both {
+                let rem = meta.formula % 10;
+                match rem {
+                    0 => {
+                        if meta.parent1 == cell_key || meta.parent2 == cell_key {
+                            return (true, HighlightType::Parent);
+                        }
+                    }
+                    2 => {
+                        if meta.parent1 == cell_key {
+                            return (true, HighlightType::Parent);
+                        }
+                    }
+                    3 => {
+                        if meta.parent2 == cell_key {
+                            return (true, HighlightType::Parent);
+                        }
+                    }
+                    _  => {
+                        if self.is_cell_in_range(cell_key, meta.parent1, meta.parent2) {
+                            return (true, HighlightType::Parent);
+                        }
+                    }
+                }
+            }
+        }
+        if self.highlight_type == HighlightType::Child || self.highlight_type == HighlightType::Both {
+            // get cell children and also it can be in range also 
+            let mut is_contains = false;
+            
+            // Safely check if the highlight_cell has any children
+            if let Some(children) = self.children.get(&self.highlight_cell) {
+                is_contains = children.contains(&cell_key);
+            }
+            
+            // Check range-based children
+            is_contains |= self.range_children.iter().any(|rc| {
+                rc.child_key == cell_key && self.is_cell_in_range(self.highlight_cell, rc.start_key, rc.end_key)
+            });
+            
+            if is_contains {
+                return (true, HighlightType::Child);
+            }
+        }
+        // If not a parent or child, return false
+        (false, HighlightType::None)
+    }
+    
+    pub fn print_spreadsheet_with_highlights(&self) {
+        if !self.output_enabled {
+            return;
+        }
+    
+        let start_row = self.viewport_row;
+        let start_col = self.viewport_col;
+        let display_row = min(self.rows - start_row, 10); // Display only a portion of the spreadsheet
+        let display_col = min(self.cols - start_col, 10);
+    
+        // ANSI color codes
+        const RESET: &str = "\x1b[0m";
+        const RED: &str = "\x1b[1;31m";   // Bold red for parents
+        const GREEN: &str = "\x1b[1;32m"; // Bold green for children
+        const CYAN: &str = "\x1b[1;36m";  // Bold cyan for main cell
+    
+        // Print column headers
+        print!("     ");
+        for i in 0..display_col {
+            print!("{:<8} ", self.get_column_name(start_col + i));
+        }
+        println!();
+    
+        // Print rows with data
+        for i in 0..display_row {
+            print!("{:<4} ", start_row + i + 1); // Show 1-based row numbers
+            for j in 0..display_col {
+                let row = start_row + i;
+                let col = start_col + j;
+                let cell_key = self.get_key(row, col);
+                let cell_value = self.get_cell(row, col);
+                
+                // Check if this cell should be highlighted - only check cells in view
+                let (is_highlighted, highlight_type) = self.is_highlighted(cell_key);
+                
+                // Apply appropriate color based on highlight status
+                // If it's the main highlighted cell itself
+                if cell_key == self.highlight_cell {
+                    print!("{}", CYAN);
+                }
+                else if is_highlighted {
+                    match highlight_type {
+                        HighlightType::Parent => print!("{}", RED),
+                        HighlightType::Child => print!("{}", GREEN),
+                        HighlightType::Both => {}, // This shouldn't happen due to circular ref prevention
+                        HighlightType::None => {}, // Main highlighted cell
+                    }
+                }
+                
+                // Print cell value
+                match cell_value {
+                    CellValue::Integer(value) => print!("{:<8} ", value),
+                    CellValue::Error => print!("{:<8} ", "ERR"),
+                }
+                
+                // Reset color if necessary
+                print!("{}", RESET);
+            }
+            println!();
+        }
+    }
+
     pub fn print_spreadsheet(&self) {
         if !self.output_enabled {
+            return;
+        }
+        else if self.highlight_type != HighlightType::None {
+            self.print_spreadsheet_with_highlights();
             return;
         }
 

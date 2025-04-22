@@ -70,7 +70,9 @@ fn main() {
 
         // Main loop for command input
         loop {
+            // Print the spreadsheet 
             sheet.print_spreadsheet();
+
             print!("[{:.1}] ({}) > ", last_time, last_status);
             io::stdout().flush().unwrap(); // Ensure the prompt is shown
 
