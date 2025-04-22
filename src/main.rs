@@ -6,7 +6,7 @@ mod reevaluate_topo;
 mod spreadsheet;
 mod vim_mode;
 mod visualize_cells;
-mod extensions;
+mod extensions_2;
 use std::env;
 use std::io::{self, Write};
 use std::process;
@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use evaluator::handle_command;
 use spreadsheet::CommandStatus;
 use spreadsheet::Spreadsheet;
-use crate::extensions::save_spreadsheet;
+use crate::extensions_2::save_spreadsheet;
 const DEFAULT_FILENAME: &str = "rust_spreadsheet.sheet";
 
 fn main() {
@@ -123,6 +123,7 @@ fn main() {
                 CommandStatus::CmdUnrecognized => "unrecognized_cmd",
                 CommandStatus::CmdCircularRef => "circular_ref",
                 CommandStatus::CmdInvalidCell => "invalid_cell",
+                CommandStatus::CmdLockedCell => "locked_cell",
             };
         }
     }

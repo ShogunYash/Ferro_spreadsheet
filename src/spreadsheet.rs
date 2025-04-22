@@ -3,10 +3,12 @@ use crate::visualize_cells;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use crate::formula::Range;
 
 // Constants
 const MAX_ROWS: i16 = 999; // Maximum number of rows in the spreadsheet   
 const MAX_COLS: i16 = 18278; // Maximum number of columns in the spreadsheet
+pub const MAX_DISPLAY: i16 = 15;
 
 // Structure to represent a range-based child relationship
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -22,6 +24,7 @@ pub enum CommandStatus {
     CmdUnrecognized,
     CmdCircularRef,
     CmdInvalidCell,
+    CmdLockedCell,
 }
 
 // Modified CellMeta to remove children (they're now stored separately)
@@ -53,6 +56,12 @@ pub struct Spreadsheet {
     pub viewport_row: i16,
     pub viewport_col: i16,
     pub output_enabled: bool,
+    pub display_rows: i16,
+    pub display_cols: i16,
+    pub locked_ranges: Vec<Range>,
+    pub named_ranges: HashMap<String, Range>,
+    pub cell_history: HashMap<i32, Vec<CellValue>>,
+    pub last_edited: Option<(i16, i16)>,
 }
 
 impl Spreadsheet {
@@ -77,6 +86,12 @@ impl Spreadsheet {
             viewport_row: 0,
             viewport_col: 0,
             output_enabled: true,
+            display_rows: 10,
+            display_cols: 10,
+            locked_ranges: Vec::new(),
+            named_ranges: HashMap::new(),
+            cell_history: HashMap::new(),
+            last_edited: None,
         })
     }
 
@@ -101,6 +116,15 @@ impl Spreadsheet {
     pub fn get_cell_meta(&mut self, row: i16, col: i16) -> &mut CellMeta {
         let key = self.get_key(row, col);
         self.cell_meta.entry(key).or_insert_with(CellMeta::new)
+    }
+
+    pub fn get_cell_meta_ref(&self, row: i16, col: i16) -> &CellMeta {
+        let key = self.get_key(row, col);
+        self.cell_meta.get(&key).unwrap_or(&CellMeta {
+            formula: -1,
+            parent1: -1,
+            parent2: -1,
+        })
     }
 
     pub fn get_column_name(&self, mut col: i16) -> String {
@@ -267,7 +291,7 @@ impl Spreadsheet {
                 };
             }
             's' => {
-                if self.viewport_row + VIEWPORT_SIZE < self.rows {
+                if self.viewport_row + VIEWPORT_SIZE < self.rows - 9 {
                     self.viewport_row += 10;
                 } else {
                     self.viewport_row = self.rows - VIEWPORT_SIZE;
@@ -282,7 +306,7 @@ impl Spreadsheet {
             }
 
             'd' => {
-                if self.viewport_col + VIEWPORT_SIZE < self.cols {
+                if self.viewport_col + VIEWPORT_SIZE < self.cols - 9 {
                     self.viewport_col += 10;
                 } else {
                     self.viewport_col = self.cols - VIEWPORT_SIZE;
@@ -295,6 +319,41 @@ impl Spreadsheet {
     pub fn visualize_cell_relationships(&self, row: i16, col: i16) -> CommandStatus {
         // Check if the cell is valid
         visualize_cells::visualize_cell_relationships(self, row, col)
+    }
+
+    pub fn lock_range(&mut self, range: Range) {
+        self.locked_ranges.push(range);
+    }
+
+    pub fn is_cell_locked(&self, row: i16, col: i16) -> bool {
+        for range in &self.locked_ranges {
+            if row >= range.start_row && row <= range.end_row && col >= range.start_col && col <= range.end_col {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn set_last_edited(&mut self, row: i16, col: i16) {
+        self.last_edited = Some((row, col));
+    }
+
+    pub fn scroll_to_last_edited(&mut self) {
+        if let Some((row, col)) = self.last_edited {
+            self.viewport_row = row;
+            self.viewport_col = col;
+        }
+    }
+
+    pub fn get_cell_name(&self, row: i16, col: i16) -> String {
+        for (name, range) in &self.named_ranges {
+            if range.start_row == row && range.start_col == col &&
+               range.end_row == row && range.end_col == col {
+                return name.clone();
+            }
+        }
+        let col_name = self.get_column_name(col);
+        format!("{}{}", col_name, row + 1)
     }
 }
 

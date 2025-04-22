@@ -43,7 +43,7 @@
 
 \title{Rust Lab Spreadsheet - Design and Architecture}
 \author{
-  Karthik Manikandan\\ 2023CS1
+  Karthik Manikandan\\ 2023CS10298
   \and
   Yash Shindekar \\ 2023CS1
   \and
@@ -60,52 +60,268 @@
 \section{Primary Data Structures}
 \label{sec:data-structures}  
 
-We have used HashMaps
+We have used \lstinline{HashMaps} to store the children of a cell, their parents, and the formula having the cell key(a memory-efficient way of storing the row and column as a single i32 value) as their keys in the \lstinline{HashMaps} . 
 
-\begin{lstlisting}[language=Rust, caption={Key spreadsheet types}, label=lst:types]
-use crate::spreadsheet::{CommandStatus, Spreadsheet};
-
-/// Example of a cell value enum
-#[derive(Debug, Clone, PartialEq)]
+\begin{lstlisting}[language=Rust, caption={The spreadsheet Struct having the Hashmaps as described}, label=lst:types]
 pub enum CellValue {
     Integer(i32),
     Error,
 }
 
-/// Metadata for dependency tracking
 pub struct CellMeta {
     pub formula: i16,
     pub parent1: i32,
     pub parent2: i32,
 }
-\end{lstlisting}
 
-\emph{(Replace the above with the actual definitions of your primary data structures.)}
+pub struct Spreadsheet {
+    pub grid: Vec<CellValue>, // Vector of CellValues (contiguous in memory)
+    pub children: HashMap<i32, Box<HashSet<i32>>>, // Map from cell key to boxed HashSet of children
+    pub range_children: Vec<RangeChild>, // Vector of range-based child relationships
+    pub cell_meta: HashMap<i32, CellMeta>, // Map from cell key to metadata
+    pub rows: i16,
+    pub cols: i16,
+    pub viewport_row: i16,
+    pub viewport_col: i16,
+    pub output_enabled: bool,
+}
+\end{lstlisting}
+We have used the \lstinline{CellValue} enum to model the value of each cell, and to model the grid of the spreadsheet, we have used a vector of \lstinline{CellValue}'s.
+
 
 \section{Interfaces Between Software Modules}
 \label{sec:interfaces}
 
-Describe how each module talks to the others. For example:
+We have made a modular codebase with a separate module for vim mode which works when the usual command is typed with a "--vim" flag.
+The directory structure can be seen by the module imports in the main file of the code.
+
+\begin{lstlisting}[language=Rust, caption={Modules of our codebase}, label=lst:modules]
+mod cell;
+mod evaluator;
+mod formula;
+mod graph;
+mod reevaluate_topo;
+mod spreadsheet;
+mod vim_mode;
+mod visualize_cells;
+\end{lstlisting}
+
+\subsection{Core Module Responsibilities}
 
 \begin{itemize}
-  \item \textbf{\texttt{cell}} exposes \lstinline{CellValue} and parsing routines.
-  \item \textbf{\texttt{formula}} provides evaluation functions like \lstinline{eval_avg}, \lstinline{sum_value}, etc.
-  \item \textbf{\texttt{reevaluate_topo}} re‑evaluates cells in topological order and detects cycles.
-  \item \textbf{\texttt{spreadsheet}} is the central orchestrator: it holds the grid, dependency maps, and viewport state.
+  \item \textbf{\texttt{cell}} exposes \lstinline{CellValue} and parsing routines for cell references.
+  \item \textbf{\texttt{evaluator}} handles expression evaluation and command processing.
+  \item \textbf{\texttt{formula}} provides evaluation functions like \lstinline{eval_avg}, \lstinline{sum_value}, \lstinline{eval_min},  \lstinline{eval_max} and \lstinline{parse range} for evaluating formulas contain a parents in a range.
+  \item \textbf{\texttt{graph}} manages dependency relationships between cells.
+  \item \textbf{\texttt{reevaluate topo}} re-evaluates cells in topological order and detects cycles.
+  \item \textbf{\texttt{spreadsheet}} is the central data-keeper: it holds the grid, dependency maps, and viewport state.
+  \item \textbf{\texttt{vim\_mode}} implements vim-like keyboard navigation and editing capabilities.
+  \item \textbf{\texttt{visualize\_cells}} handles visualization of cell dependencies.
 \end{itemize}
 
-You can show function prototypes to clarify:
+\subsection{Module Interfaces and Data Flow}
 
-\begin{lstlisting}[language=Rust, caption={Spreadsheet façade}, label=lst:spreadsheet-api]
-pub struct Spreadsheet { /* ... */ }
+The \texttt{spreadsheet} module serves as the central data-keeper for the application:
 
+\begin{lstlisting}[language=Rust, caption={Spreadsheet}, label=lst:spreadsheet-api]
 impl Spreadsheet {
-    pub fn create(rows: i16, cols: i16) -> Option<Spreadsheet>;
-    pub fn set_cell_value(&mut self, row: i16, col: i16, expr: &str, sleep: &mut f64) -> CommandStatus;
+    pub fn create(rows: i16, cols: i16) -> Option;
+    pub fn get_key(&self, row: i16, col: i16) -> i32;
+    pub fn get_row_col(&self, key: i32) -> (i16, i16);
     pub fn get_cell(&self, row: i16, col: i16) -> &CellValue;
-    // …and so on
+    pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut CellValue;
+    pub fn get_cell_meta(&mut self, row: i16, col: i16) -> &mut CellMeta;
+    // ...and so on
 }
 \end{lstlisting}
+
+\subsection{Cell Module Interface}
+
+The \texttt{cell} module provides the fundamental data structures such as CellValue and and as the parse cell reference function.
+
+
+\subsection{Formula Evaluation Flow}
+
+The \texttt{formula} module exposes functions for cell range operations:
+
+\begin{lstlisting}[language=Rust, caption={Formula module interface}, label=lst:formula-api]
+pub struct Range {
+    pub start_row: i16,
+    pub start_col: i16,
+    pub end_row: i16,
+    pub end_col: i16,
+}
+
+pub fn parse_range(spreadsheet: &Spreadsheet, range_str: &str) -> Result;
+
+pub fn sum_value(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    parent1: i32,
+    parent2: i32,
+) -> CommandStatus;
+
+pub fn eval_avg(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    parent1: i32,
+    parent2: i32,
+) -> CommandStatus;
+
+// ...other evaluation functions
+\end{lstlisting}
+
+\subsection{Evaluator Module Interface}
+
+The \texttt{evaluator} module handles command processing and formula evaluation:
+
+\begin{lstlisting}[language=Rust, caption={Evaluator module interface}, label=lst:evaluator-api]
+pub fn handle_command(
+    sheet: &mut Spreadsheet,
+    trimmed: &str,
+    sleep_time: &mut f64,
+) -> CommandStatus;
+
+pub fn set_cell_value(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    expr: &str,
+    sleep_time: &mut f64,
+) -> CommandStatus;
+
+pub fn evaluate_formula(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    expr: &str,
+    sleep_time: &mut f64,
+) -> CommandStatus;
+
+pub fn evaluate_arithmetic(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    expr: &str,
+) -> CommandStatus;
+\end{lstlisting}
+
+\subsection{Graph Module Interface}
+
+The \texttt{graph} module manages cell dependencies:
+
+\begin{lstlisting}[language=Rust, caption={Graph module interface}, label=lst:graph-api]
+pub fn add_children(
+    sheet: &mut Spreadsheet,
+    parent1: i32,
+    parent2: i32,
+    formula: i16,
+    row: i16,
+    col: i16,
+) -> ();
+
+pub fn remove_all_parents(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+) -> ();
+\end{lstlisting}
+
+\subsection{Reevaluate Topo Module Interface}
+
+The \texttt{reevaluate\_topo} module handles dependency propagation:
+
+\begin{lstlisting}[language=Rust, caption={Reevaluate topo module interface}, label=lst:reevaluate-api]
+pub fn toposort_reval_detect_cycle(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    sleep_time: &mut f64,
+) -> bool;
+
+pub fn sleep_fn(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    val: i32,
+    sleep_time: &mut f64,
+) -> ();
+\end{lstlisting}
+
+\subsection{Data Flow Examples}
+
+\subsubsection{Setting a Cell Value}
+
+When a user enters a formula like "=A1+B1" into cell C1, the data flows as follows:
+
+\begin{enumerate}
+    \item The main loop calls \lstinline{evaluator::handle_command(&mut sheet, "C1=A1+B1", &mut sleep_time)}.
+    \item \lstinline{handle_command} parses the input and calls \lstinline{set_cell_value}.
+    \item \lstinline{set_cell_value} calls \lstinline{evaluate_formula} to process the expression.
+    \item \lstinline{evaluate_formula} detects this is an arithmetic expression and calls \lstinline{evaluate_arithmetic}.
+    \item \lstinline{evaluate_arithmetic} parses the expression, identifies cell references using \lstinline{parse_cell_reference}.
+    \item It updates the cell metadata with parent references and formula type.
+    \item \lstinline{graph::add_children} is called to update the dependency graph.
+    \item The cell value is computed and stored.
+    \item \lstinline{toposort_reval_detect_cycle} is called to propagate changes and check for cycles.
+\end{enumerate}
+
+\subsubsection{Range Function Evaluation}
+
+When evaluating a range function like "=SUM(A1:B2)":
+
+\begin{enumerate}
+    \item \lstinline{evaluate_formula} identifies this as a range function.
+    \item \lstinline{parse_range} is called to extract the range coordinates.
+    \item Cell metadata is updated with range boundaries.
+    \item \lstinline{add_children} establishes dependencies.
+    \item The appropriate formula function (e.g., \lstinline{sum_value}) is called.
+    \item The function iterates through the range, computing the result.
+    \item The result is stored in the target cell.
+    \item \lstinline{toposort_reval_detect_cycle} propagates changes to dependent cells.
+\end{enumerate}
+
+\subsection{Module Communication Patterns}
+
+Our codebase employs several design patterns for module communication:
+
+\begin{itemize}
+    \item \textbf{Façade Pattern}: The \texttt{spreadsheet} module provides a simplified interface to the complex subsystem.
+    \item \textbf{Observer Pattern}: When cells change, dependent cells are notified and updated through the dependency graph.
+    \item \textbf{Command Pattern}: The \texttt{vim\_mode} module translates keystrokes into commands executed on the spreadsheet.
+    \item \textbf{Strategy Pattern}: Different formula evaluation strategies are encapsulated in the \texttt{formula} module.
+\end{itemize}
+
+\subsection{Vim Mode Integration}
+
+The \texttt{vim\_mode} module is activated with the "--vim" flag:
+
+\begin{lstlisting}[language=Rust, caption={Vim mode integration}, label=lst:vim-mode]
+// In main.rs
+if vim_mode_enabled {
+    let filename = Some(DEFAULT_FILENAME.to_string());
+    vim_mode::run_editor(&mut sheet, filename);
+} else {
+    // Standard command-line interface
+}
+\end{lstlisting}
+
+\subsection{Module Extensibility}
+
+The modular design allows for easy extension:
+
+\begin{itemize}
+    \item New formula functions can be added to the \texttt{formula} module.
+    \item Alternative input modes beyond \texttt{vim\_mode} could be implemented.
+    \item The \texttt{cell} module could be extended to support additional data types.
+    \item Different visualization strategies could be implemented in \texttt{visualize\_cells}.
+\end{itemize}
+
+This architecture demonstrates a well-designed separation of concerns with clear interfaces between modules, enabling maintainability and extensibility while managing the complexity inherent in a spreadsheet application.
+
+
 
 \section{Design Justification}
 \label{sec:justification}
@@ -113,28 +329,500 @@ impl Spreadsheet {
 Here explain why your choices make for a robust, maintainable system:
 
 \begin{itemize}
-  \item \textbf{Separation of Concerns:} data storage, parsing, evaluation, and visualization are cleanly decoupled.
-  \item \textbf{Performance:} using contiguous `Vec<CellValue>` for O(1) cell access; minimal allocations in `parse_cell_reference`.
-  \item \textbf{Extensibility:} adding new formulas or functions involves plugging into `evaluate_formula` without touching core data structures.
-  \item \textbf{Safety:} Rust’s ownership and type system prevent data races and many classes of bugs.
+  \item \textbf{Separation of Concerns:} Data storage, parsing, evaluation, and visualization are cleanly decoupled. Each module has a specific responsibility, with \texttt{spreadsheet} acting as the central orchestrator, \texttt{cell} handling parsing, \texttt{formula} managing evaluation functions, and \texttt{visualize\_cells} handling visualization.
+  
+  \item \textbf{Performance:} Using contiguous \lstinline{Vec} for O(1) cell access enables fast retrieval and updates. The codebase minimizes allocations in \lstinline{parse_cell_reference} by operating directly on byte slices rather than creating new strings. The column name conversion functions are optimized to avoid repeated string operations.
+  
+  \item \textbf{Extensibility:} Adding new formulas or functions involves plugging into \lstinline{evaluate_formula} without touching core data structures. The formula type system using integer codes (e.g., \lstinline{formula_type += 0} for cell references) allows for easy addition of new formula types.
+  
+  \item \textbf{Safety:} Rust's ownership and type system prevent data races and many classes of bugs. \textbf{The codebase leverages Rust's pattern matching and error handling to ensure robustness, with functions \textit{returning \lstinline{CommandStatus} to indicate} success or specific failure modes.}
+  
+  \item \textbf{Memory Efficiency:} The design optimizes memory usage by removing empty HashSets from the children map and using boxed HashSets to reduce memory overhead. The \lstinline{cell_meta} map only stores entries for cells with formulas or dependencies.
+  
+  \item \textbf{Error Handling:} The system provides clear error messages through the \lstinline{CommandStatus} enum, distinguishing between unrecognized commands, circular references, and invalid cells.
 \end{itemize}
+
+\subsection{Module Design Principles}
+
+The codebase follows several key design principles that contribute to its robustness:
+
+\begin{itemize}
+  \item \textbf{Single Responsibility Principle:} Each module has a well-defined purpose. For example, \lstinline{formula} focuses solely on range operations and formula evaluation, while \lstinline{graph} manages dependency relationships.
+  
+  \item \textbf{Information Hiding:} Implementation details are encapsulated within modules, with public interfaces exposing only what's necessary. \textbf{\textit{This is evident in how the \lstinline{spreadsheet} module provides accessor methods rather than direct access to its internal state.}}
+  
+  \item \textbf{Dependency Management:} The system carefully tracks dependencies between cells, enabling proper propagation of changes and detection of circular references. This is crucial for maintaining data consistency in a spreadsheet application.
+  
+  \item \textbf{Optimized Algorithms:} The codebase uses efficient algorithms for operations like topological sorting in \lstinline{reevaluate_topo} to ensure performance even with complex dependency graphs.
+\end{itemize}
+
+\section{Approaches for Encapsulation}
+\label{sec:encapsulation}
+
+Our codebase implements several approaches to encapsulation that enhance maintainability and robustness:
+
+\subsection{Module-Level Encapsulation}
+
+The primary encapsulation mechanism used is Rust's module system. Each module encapsulates related functionality:
+
+\begin{itemize}
+  \item \textbf{Private Implementation Details:} By default, functions and types are private to their module, exposing only what's explicitly marked as \lstinline{pub}.
+  
+  \item \textbf{Controlled Access:} The \lstinline{spreadsheet} module provides controlled access to the grid through methods like \lstinline{get_cell} and \lstinline{get_mut_cell}, preventing direct manipulation of the underlying data structure.
+  
+  \item \textbf{Interface Stability:} Public interfaces are carefully designed to be stable, allowing internal implementations to change without affecting client code.
+\end{itemize}
+
+\begin{lstlisting}[language=Rust, caption={Module-level encapsulation example}, label=lst:module-encap]
+// Public interface in spreadsheet.rs
+impl Spreadsheet {
+    pub fn get_cell(&self, row: i16, col: i16) -> &CellValue {
+        let index = self.get_index(row, col);
+        &self.grid[index]
+    }
+    
+    // Private helper method
+    fn get_index(&self, row: i16, col: i16) -> usize {
+        (row as usize) * (self.cols as usize) + (col as usize)
+    }
+}
+\end{lstlisting}
+
+\subsection{Data Encapsulation}
+
+The codebase encapsulates data through several mechanisms:
+
+\begin{itemize}
+  \item \textbf{Struct Encapsulation:} The \lstinline{Spreadsheet} struct encapsulates the grid, dependency maps, and viewport state, providing methods for interaction rather than direct field access.
+  
+  \item \textbf{Type Abstraction:} The \lstinline{CellValue} enum abstracts the representation of cell values, allowing for future extensions without changing client code.
+  
+  \item \textbf{Metadata Management:} Cell metadata is managed through the \lstinline{cell_meta} map, with accessor methods ensuring consistent state.
+\end{itemize}
+
+\begin{lstlisting}[language=Rust, caption={Data encapsulation with accessor methods}, label=lst:data-encap]
+// Encapsulated access to cell metadata
+pub fn get_cell_meta(&mut self, row: i16, col: i16) -> &mut CellMeta {
+    let key = self.get_key(row, col);
+    self.cell_meta.entry(key).or_insert_with(CellMeta::new)
+}
+\end{lstlisting}
+
+\subsection{Behavioral Encapsulation}
+
+Complex behaviors are encapsulated into dedicated functions:
+
+\begin{itemize}
+  \item \textbf{Formula Evaluation:} The evaluation logic for different formula types is encapsulated in dedicated functions like \lstinline{eval_avg} and \lstinline{sum_value}.
+  
+  \item \textbf{Command Processing:} The \lstinline{handle_command} function encapsulates the logic for interpreting and executing user commands.
+  
+  \item \textbf{Dependency Management:} The \lstinline{graph} module encapsulates the logic for managing cell dependencies, hiding the details of how dependencies are tracked and updated.
+\end{itemize}
+
+\begin{lstlisting}[language=Rust, caption={Behavioral encapsulation in formula evaluation}, label=lst:behavior-encap]
+// Encapsulated formula evaluation behavior
+pub fn eval_avg(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    parent1: i32,
+    parent2: i32,
+) -> CommandStatus {
+    let (start_row, start_col) = sheet.get_row_col(parent1);
+    let (end_row, end_col) = sheet.get_row_col(parent2);
+    let count = ((end_row - start_row + 1) as i32) * ((end_col - start_col + 1) as i32);
+    
+    match sum_value(sheet, row, col, parent1, parent2) {
+        CommandStatus::CmdOk => {
+            let cell_value = sheet.get_mut_cell(row, col);
+            if let CellValue::Integer(value) = cell_value {
+                *cell_value = CellValue::Integer(*value / count);
+            }
+        }
+        _ => return CommandStatus::CmdOk,
+    }
+    
+    CommandStatus::CmdOk
+}
+\end{lstlisting}
 
 \section{Design Evolution \& Modifications}
 \label{sec:modifications}
 
-Document any changes you made after initial design:
+Document any changes you made after the initial design:
 
 \begin{itemize}
-  \item Added range‑based dependency tracking (`RangeChild` & `add_range_child`) to optimize multi‑cell formulas.
-  \item Switched from storing children in a \lstinline{Vec} to a \lstinline{HashMap<i32, HashSet<i32>>} for sparser graphs.
-  \item Introduced `sleep_fn` and the `SLEEP` formula for performance benchmarking.
-  \item Refactored cycle detection into its own module (`toposort_reval_detect_cycle`) for testability.
+  \item \textbf{Added range-based dependency tracking:} Implemented \lstinline{RangeChild} struct and \lstinline{add_range_child} method to optimize multi-cell formulas. This allows efficient tracking of dependencies when a cell depends on a range of cells, rather than individual cells.
+  
+  \item \textbf{Optimized dependency storage:} Switched from storing children in a \lstinline{Vec} to a \lstinline{HashMap>>} for sparser graphs. This reduces memory usage for spreadsheets with few dependencies and improves lookup performance.
+  
+  \item \textbf{Introduced performance benchmarking:} Added \lstinline{sleep_fn} and the \lstinline{SLEEP} formula for performance benchmarking, allowing measurement of execution time and simulation of long-running operations.
+  
+  \item \textbf{Refactored cycle detection:} Moved cycle detection into its own module (\lstinline{toposort_reval_detect_cycle}) for improved testability and separation of concerns. This allows for more focused testing of the cycle detection algorithm.
+  
+  \item \textbf{Optimized string handling:} Improved parsing functions to work directly with byte slices rather than creating new strings, reducing memory allocations and improving performance.
+  
+  \item \textbf{Enhanced error handling:} Expanded the \lstinline{CommandStatus} enum to provide more specific error types, improving error reporting and handling.
+  
+  \item \textbf{Memory optimization:} Implemented cleanup of empty HashSets in the children map to reduce memory usage, and used boxed HashSets to reduce overhead.
 \end{itemize}
+
+\subsection{Performance Optimizations}
+
+Several performance optimizations were implemented throughout the codebase:
+
+\begin{lstlisting}[language=Rust, caption={Optimized column name conversion}, label=lst:perf-opt]
+pub fn get_column_name(&self, mut col: i16) -> String {
+    // Pre-calculate the length needed for the string
+    let mut temp_col = col + 1; // Convert from 0-based to 1-based
+    let mut len = 0;
+    while temp_col > 0 {
+        len += 1;
+        temp_col = (temp_col - 1) / 26;
+    }
+    
+    // Create a buffer of bytes to avoid repeated string operations
+    let mut buffer = vec![0; len];
+    let mut i = len;
+    col += 1; // Convert from 0-based to 1-based
+    
+    while col > 0 {
+        i -= 1;
+        buffer[i] = b'A' + ((col - 1) % 26) as u8;
+        col = (col - 1) / 26;
+    }
+    
+    // Convert the byte buffer to a string in one operation
+    unsafe {
+        // This is safe because we know our bytes are valid ASCII from b'A' to b'Z'
+        String::from_utf8_unchecked(buffer)
+    }
+}
+\end{lstlisting}
+
+\subsubsection{Formula Type Encoding with Opcodes}
+
+The codebase uses an efficient opcode system to represent formula types, which significantly reduces memory usage and improves performance. Instead of storing formula types as strings or complex enums, we use simple integer codes (opcodes) that encode both the operation type and operand characteristics:
+
+\begin{lstlisting}[language=Rust, caption={Formula type encoding with opcodes}, label=lst:formula-encoding]
+// Determine formula type based on operator and operand types
+let mut formula_type = match op {
+    b'+' => 10,
+    b'-' => 20,
+    b'*' => 40,
+    b'/' => 30,
+    _ => unreachable!(),
+};
+
+// Adjust formula type based on cell references
+if left_is_cell && right_is_cell {
+    formula_type += 0; // Both are cells, no adjustment needed
+} else if left_is_cell {
+    formula_type += 2;
+} else if right_is_cell {
+    formula_type += 3;
+}
+\end{lstlisting}
+
+This encoding scheme offers several advantages:
+
+\begin{itemize}
+  \item \textbf{Memory Efficiency:} Using a single \lstinline{i16} value to store both the operation type and operand characteristics requires only 2 bytes per formula, compared to potentially dozens of bytes for string representations.
+  
+  \item \textbf{Fast Comparisons:} Integer comparisons are significantly faster than string comparisons, speeding up formula evaluation and dependency tracking.
+  
+  \item \textbf{Compact Metadata:} The \lstinline{CellMeta} struct stores formula information compactly with just three fields: \lstinline{formula: i16}, \lstinline{parent1: i32}, and \lstinline{parent2: i32}.
+\end{itemize}
+
+The opcode system uses specific ranges for different formula types:
+
+\begin{itemize}
+  \item \textbf{Range-based functions:} Values 5-9 represent functions like \lstinline{SUM} (5), \lstinline{AVG} (6), \lstinline{MIN} (7), \lstinline{MAX} (8), and \lstinline{STDEV} (9).
+  
+  \item \textbf{Arithmetic operations:} Values 10-49 represent arithmetic operations with variations based on operand types:
+    \begin{itemize}
+      \item Base 10: Addition (+)
+      \item Base 20: Subtraction (-)
+      \item Base 30: Division (/)
+      \item Base 40: Multiplication (*)
+    \end{itemize}
+    
+  \item \textbf{Special formulas:} Values like 82 for cell references and 102 for the \lstinline{SLEEP} function.
+\end{itemize}
+
+\subsubsection{Optimized Range Operations}
+
+The codebase optimizes range operations by using direct byte manipulation and minimizing allocations:
+
+\begin{lstlisting}[language=Rust, caption={Optimized range parsing}, label=lst:range-parsing]
+pub fn parse_range(spreadsheet: &Spreadsheet, range_str: &str) -> Result {
+    // Find the colon index using bytes to avoid UTF-8 decoding
+    let bytes = range_str.as_bytes();
+    let mut colon_index = 0;
+    for (i, &b) in bytes.iter().enumerate() {
+        if b == b':' {
+            colon_index = i;
+            break;
+        }
+    }
+    
+    // Avoid creating new strings by using slices
+    let start_cell = &range_str[..colon_index];
+    let end_cell = &range_str[colon_index + 1..];
+    
+    // Parse cell references and validate them in one step
+    let (start_row, start_col) = parse_cell_reference(spreadsheet, start_cell)?;
+    let (end_row, end_col) = parse_cell_reference(spreadsheet, end_cell)?;
+    
+    // Construct the Range directly
+    Ok(Range {
+        start_row,
+        start_col,
+        end_row,
+        end_col,
+    })
+}
+\end{lstlisting}
+
+\subsubsection{Efficient Cell Reference Parsing}
+
+The \lstinline{parse_cell_reference} function is heavily optimized to work directly with byte slices rather than creating new strings:
+
+\begin{lstlisting}[language=Rust, caption={Optimized cell reference parsing}, label=lst:cell-ref-parsing]
+pub fn parse_cell_reference(
+    sheet: &Spreadsheet,
+    cell_ref: &str,
+) -> Result {
+    let cell_ref = cell_ref.as_bytes();
+    
+    // Find column/row split point in one pass
+    let mut split_idx = 0;
+    let mut col_length = 0;
+    while split_idx = b'A' && cell_ref[split_idx] >>} to reduce memory overhead for the many small HashSets that typically exist.
+  
+  \item \textbf{Automatic Cleanup:} Empty HashSets are removed from the \lstinline{children} map to save memory:
+  
+  \begin{lstlisting}[language=Rust, caption={Memory-efficient cleanup}, label=lst:memory-cleanup]
+  pub fn remove_child(&mut self, parent_key: i32, child_key: i32) {
+      if let Some(children) = self.children.get_mut(&parent_key) {
+          children.remove(&child_key);
+          // If the hashset is now empty, remove it from the HashMap to save memory
+          if children.is_empty() {
+              self.children.remove(&parent_key);
+          }
+      }
+  }
+  \end{lstlisting}
+  
+ \textbf{Sparse Metadata Storage:} The \lstinline{cell_meta} map only stores entries for cells with formulas or dependencies, rather than for every cell.
+
+
+\subsubsection{Optimized Formula Evaluation}
+
+The formula evaluation process is optimized to minimize allocations and function calls:
+
+\begin{lstlisting}[language=Rust, caption={Optimized formula detection}, label=lst:formula-detection]
+// Check for range-based functions with a single pass
+let (is_formula, formula_type, prefix_len) = match bytes.get(0..3) {
+    Some(b"AVG") if bytes.get(3) == Some(&b'(') => (true, 6, 4),
+    Some(b"MIN") if bytes.get(3) == Some(&b'(') => (true, 7, 4),
+    Some(b"MAX") if bytes.get(3) == Some(&b'(') => (true, 8, 4),
+    Some(b"SUM") if bytes.get(3) == Some(&b'(') => (true, 5, 4),
+    Some(b"SLE")
+        if bytes.len() > 5
+            && bytes[3] == b'E'
+            && bytes[4] == b'P'
+            && bytes.get(5) == Some(&b'(') => (true, 102, 6),
+    Some(b"STD")
+        if bytes.len() > 5
+            && bytes[3] == b'E'
+            && bytes[4] == b'V'
+            && bytes.get(5) == Some(&b'(') => (true, 9, 6),
+    _ => (false, -1, 0),
+};
+\end{lstlisting}
+
+\section{Future Extensions}
+\label{sec:extensions}
+
+Our modular design provides a solid foundation for future extensions. Here we explore potential enhancements to the visualization extension and vim mode, as well as other possible improvements.
+
+\subsection{Enhanced Visualization Extensions}
+
+The current \lstinline{visualize_cells} module could be extended in several ways:
+
+\begin{itemize}
+  \item \textbf{Interactive Dependency Graph:} Implement a more sophisticated visualization that shows the complete dependency graph with interactive navigation. This could use a library like \lstinline{termion} for terminal-based graphics or export to a format compatible with graphing tools.
+  
+  \item \textbf{Formula Debugging:} Add visualization of formula evaluation steps, showing intermediate results and helping users understand how complex formulas are calculated.
+  
+  \item \textbf{Error Visualization:} Enhance error reporting with visual indicators of where errors occur in formula chains, making it easier to debug complex spreadsheets.
+  
+  \item \textbf{Data Visualization:} Implement basic charting capabilities to visualize data directly within the spreadsheet, such as histograms, line charts, or heatmaps.
+\end{itemize}
+
+\begin{lstlisting}[language=Rust, caption={Potential implementation of enhanced visualization}, label=lst:viz-extension]
+pub fn visualize_formula_evaluation(
+    sheet: &Spreadsheet,
+    row: i16,
+    col: i16,
+) -> CommandStatus {
+    let cell_key = sheet.get_key(row, col);
+    
+    // Get cell metadata
+    if let Some(meta) = sheet.cell_meta.get(&cell_key) {
+        println!("Formula type: {}", get_formula_name(meta.formula));
+        
+        // Show dependencies
+        if meta.parent1 >= 0 {
+            let (p1_row, p1_col) = sheet.get_row_col(meta.parent1);
+            println!("Dependency 1: {}{}", sheet.get_column_name(p1_col), p1_row + 1);
+            print_cell_value(sheet, p1_row, p1_col);
+        }
+        
+        if meta.parent2 >= 0 {
+            let (p2_row, p2_col) = sheet.get_row_col(meta.parent2);
+            println!("Dependency 2: {}{}", sheet.get_column_name(p2_col), p2_row + 1);
+            print_cell_value(sheet, p2_row, p2_col);
+        }
+        
+        // Show evaluation steps based on formula type
+        visualize_evaluation_steps(sheet, row, col, meta);
+        
+        CommandStatus::CmdOk
+    } else {
+        println!("Cell has no formula");
+        CommandStatus::CmdOk
+    }
+}
+\end{lstlisting}
+
+\subsection{Enhanced Vim Mode}
+
+The \lstinline{vim_mode} module could be extended with additional features:
+
+\begin{itemize}
+  \item \textbf{Advanced Navigation:} Implement more vim-like navigation commands such as \lstinline{w} (word forward), \lstinline{b} (word backward), or \lstinline{f}/\lstinline{t} (find character) adapted for spreadsheet navigation.
+  
+  \item \textbf{Macros and Recording:} Add support for recording and replaying sequences of commands, similar to vim's macro functionality.
+  
+  \item \textbf{Multiple Registers:} Implement named registers for copying and pasting different content, allowing users to store multiple cell values or ranges.
+  
+  \item \textbf{Ex Commands:} Expand the command-line functionality with more ex-style commands for operations like search and replace, sorting, or filtering.
+  
+  \item \textbf{Visual Block Mode:} Add support for visual block selection, allowing operations on rectangular regions of cells.
+\end{itemize}
+
+\begin{lstlisting}[language=Rust, caption={Potential implementation of vim macros}, label=lst:vim-macros]
+pub struct VimState {
+    // Existing fields...
+    macros: HashMap>,
+    recording_macro: Option,
+    current_macro_commands: Vec,
+}
+
+impl VimState {
+    // Record a macro
+    pub fn start_recording_macro(&mut self, register: char) {
+        self.recording_macro = Some(register);
+        self.current_macro_commands.clear();
+    }
+    
+    pub fn stop_recording_macro(&mut self) {
+        if let Some(register) = self.recording_macro {
+            self.macros.insert(register, self.current_macro_commands.clone());
+            self.recording_macro = None;
+        }
+    }
+    
+    pub fn record_command(&mut self, command: String) {
+        if self.recording_macro.is_some() {
+            self.current_macro_commands.push(command);
+        }
+    }
+    
+    pub fn play_macro(&mut self, register: char, sheet: &mut Spreadsheet) -> CommandStatus {
+        if let Some(commands) = self.macros.get(&register) {
+            for cmd in commands {
+                // Execute each command in the macro
+                let status = handle_command(sheet, cmd, &mut 0.0);
+                if status != CommandStatus::CmdOk {
+                    return status;
+                }
+            }
+        }
+        CommandStatus::CmdOk
+    }
+}
+\end{lstlisting}
+
+\subsection{Additional Feature Extensions}
+
+Beyond visualization and vim mode, several other extensions could enhance the spreadsheet:
+
+\begin{itemize}
+  \item \textbf{More Formula Types:} Implement additional formula types such as statistical functions (MEDIAN, MODE), text functions (CONCATENATE, SUBSTRING), or logical functions (IF, AND, OR).
+  
+  \item \textbf{Cell Formatting:} Add support for cell formatting including number formats, text alignment, and borders.
+  
+  \item \textbf{Named Ranges:} Allow users to define named ranges that can be referenced in formulas, improving formula readability.
+  
+  \item \textbf{File Import/Export:} Implement support for importing and exporting spreadsheets in common formats like CSV or Excel.
+  
+  \item \textbf{Undo/Redo Stack:} Add a proper undo/redo system to allow users to revert changes.
+\end{itemize}
+
+\begin{lstlisting}[language=Rust, caption={Implementation of named ranges}, label=lst:named-ranges]
+pub struct NamedRange {
+    name: String,
+    start_row: i16,
+    start_col: i16,
+    end_row: i16,
+    end_col: i16,
+}
+
+impl Spreadsheet {
+    pub fn add_named_range(
+        &mut self,
+        name: String,
+        start_row: i16,
+        start_col: i16,
+        end_row: i16,
+        end_col: i16,
+    ) -> CommandStatus {
+        // Validate range
+        if start_row = self.rows || end_col >= self.cols ||
+           start_row > end_row || start_col > end_col {
+            return CommandStatus::CmdInvalidCell;
+        }
+        
+        // Add to named ranges map
+        self.named_ranges.insert(name, NamedRange {
+            name: name.clone(),
+            start_row,
+            start_col,
+            end_row,
+            end_col,
+        });
+        
+        CommandStatus::CmdOk
+    }
+    
+    pub fn resolve_named_range(&self, name: &str) -> Option {
+        self.named_ranges.get(name).map(|range| {
+            (range.start_row, range.start_col, range.end_row, range.end_col)
+        })
+    }
+}
+\end{lstlisting}
 
 \section*{References}
 \begin{itemize}
-  \item Rust API docs for \texttt{Spreadsheet}, \texttt{CommandStatus}, etc.
-  \item Internal design notes or RFC links (if any).
+  \item Rust API docs for \texttt{Handling borrowing errors}, etc.
+  
+  \item Rust Book: "The Rust Programming Language" 
 \end{itemize}
 
 \end{document}
+

@@ -31,5 +31,5 @@ petgraph = "0.6.4"  # Add this for graph visualization
 rustyline = "10.0.0"
 
 [[bin]]
-name = "divya_sheet"
+name = "spreadsheet"
 path = "src/main.rs"
