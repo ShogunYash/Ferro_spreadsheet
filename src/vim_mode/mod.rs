@@ -1,14 +1,14 @@
 mod commands;
 mod editor;
 
-use crate::spreadsheet::{CommandStatus, Spreadsheet};
+use crate::spreadsheet::Spreadsheet;
 use std::io::{self, Write};
 
 pub fn run_editor(sheet: &mut Spreadsheet, filename: Option<String>) {
     // Initialize vim mode editor state
     let mut editor_state = editor::EditorState::new();
 
-    // If a filename was provided, load it and set as save file
+    // If a filename was provided, load it and set it as saved file
     if let Some(file) = filename {
         editor_state.save_file = Some(file.clone());
         let _ = commands::load_spreadsheet(sheet, &file);
@@ -55,7 +55,7 @@ pub fn run_editor(sheet: &mut Spreadsheet, filename: Option<String>) {
         }
 
         // Process the command - note that history is now handled inside handle_vim_command
-        let status = commands::handle_vim_command(sheet, trimmed, &mut editor_state);
+        let _ = commands::handle_vim_command(sheet, trimmed, &mut editor_state);
 
         // Handle special case for Esc key in terminal
         if trimmed == "\x1b" && editor_state.mode == editor::EditorMode::Insert {
