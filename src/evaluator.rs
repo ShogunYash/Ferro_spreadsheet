@@ -33,18 +33,6 @@ pub fn handle_sleep(
         meta.parent2 = -1;
         meta.formula = 102; // Custom formula code for sleep
 
-        // // Check for circular reference
-        // if detect_cycle(sheet, pkey, -1, 102, cell_key) {
-        //     if let Some(old) = old_meta {
-        //         let (parent1, parent2, formula) = (old.parent1, old.parent2, old.formula);
-        //         sheet.cell_meta.insert(cell_key, old);
-        //         add_children(sheet, parent1, parent2, formula, row, col);
-        //     } else {
-        //         sheet.cell_meta.remove(&cell_key);
-        //     }
-        //     return CommandStatus::CmdCircularRef;
-        // }
-
         // Add children and update sleep time
         add_children(sheet, pkey, -1, 102, row, col);
         // Add to sleep time if integer
