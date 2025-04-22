@@ -5,7 +5,7 @@ use crate::graph::{add_children, remove_all_parents};
 use crate::reevaluate_topo::{sleep_fn, toposort_reval_detect_cycle};
 use crate::spreadsheet::{CommandStatus, Spreadsheet, MAX_DISPLAY};
 use crate::formula::Range;
-use crate::extension::get_formula_string;
+use crate::extensions::get_formula_string;
 
 fn resolve_cell_reference(sheet: &Spreadsheet, s: &str) -> Result<(i16, i16), CommandStatus> {
     if let Some(range) = sheet.named_ranges.get(s) {
