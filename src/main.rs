@@ -6,6 +6,7 @@ mod reevaluate_topo;
 mod spreadsheet;
 mod vim_mode;
 mod visualize_cells;
+mod extensions;
 use std::env;
 use std::io::{self, Write};
 use std::process;
@@ -14,7 +15,8 @@ use std::time::{Duration, Instant};
 use evaluator::handle_command;
 use spreadsheet::CommandStatus;
 use spreadsheet::Spreadsheet;
-const DEFAULT_FILENAME: &str = "untitled.sheet";
+use crate::extensions::save_spreadsheet;
+const DEFAULT_FILENAME: &str = "rust_spreadsheet.sheet";
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -58,7 +60,22 @@ fn main() {
         }
     };
     if vim_mode_enabled {
-        let filename = Some(DEFAULT_FILENAME.to_string());
+        // If args[4] exists, use it; else use default filename.
+        let filename = if args.len() > 4 {
+            Some(args[4].to_string())
+        } else {
+            // Check if DEFAULT_FILENAME exists, if not, create it.
+            use std::fs::OpenOptions;
+            use std::path::Path;
+            if !Path::new(DEFAULT_FILENAME).exists() {
+                let _ = OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .open(DEFAULT_FILENAME);
+            }
+            Some(DEFAULT_FILENAME.to_string())
+        };
+
         vim_mode::run_editor(&mut sheet, filename);
     } else {
         let mut command_time = start.elapsed().as_secs_f64();
