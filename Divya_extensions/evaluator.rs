@@ -30,11 +30,27 @@ fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
     match rem {
         0 => {
             let (left, right) = if parent1 >= 0 && parent2 >= 0 {
-                let (left_row, left_col) = sheet.get_row_col(parent1);
-                let (right_row, right_col) = sheet.get_row_col(parent2);
-                let left_name = sheet.get_cell_name(left_row, left_col);
-                let right_name = sheet.get_cell_name(right_row, right_col);
-                (left_name, right_name)
+                // Check if parent1 and parent2 are literals (not cell references)
+                let is_literal1 = parent1 < (sheet.rows as i32 * sheet.cols as i32) && parent1 >= 0;
+                let is_literal2 = parent2 < (sheet.rows as i32 * sheet.cols as i32) && parent2 >= 0;
+
+                if is_literal1 && is_literal2 {
+                    (parent1.to_string(), parent2.to_string())
+                } else if is_literal1 {
+                    let (right_row, right_col) = sheet.get_row_col(parent2);
+                    let right_name = sheet.get_cell_name(right_row, right_col);
+                    (parent1.to_string(), right_name)
+                } else if is_literal2 {
+                    let (left_row, left_col) = sheet.get_row_col(parent1);
+                    let left_name = sheet.get_cell_name(left_row, left_col);
+                    (left_name, parent2.to_string())
+                } else {
+                    let (left_row, left_col) = sheet.get_row_col(parent1);
+                    let (right_row, right_col) = sheet.get_row_col(parent2);
+                    let left_name = sheet.get_cell_name(left_row, left_col);
+                    let right_name = sheet.get_cell_name(right_row, right_col);
+                    (left_name, right_name)
+                }
             } else {
                 return "Invalid formula".to_string();
             };
