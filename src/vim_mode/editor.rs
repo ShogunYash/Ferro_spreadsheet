@@ -1,6 +1,6 @@
 // vim_mode/editor.rs
 use crate::cell::CellValue;
-use crate::spreadsheet::{CommandStatus, Spreadsheet};
+use crate::spreadsheet::{CommandStatus, Spreadsheet}; // <-- fix: import Spreadsheet as struct, not as trait
 use std::io::{self, Write};
 use std::collections::HashSet;
 
@@ -311,4 +311,534 @@ impl EditorState {
         let col_letter = sheet.get_column_name(self.cursor_col);
         format!("{}{}", col_letter, self.cursor_row + 1)
     }
+}
+
+#[cfg(test)]
+mod tests {
+
+
+use super::*;
+use crate::cell::CellValue;
+use crate::evaluator;
+use crate::spreadsheet::Spreadsheet;
+
+#[test]
+fn test_new_editor_state() {
+    let state = EditorState::new();
+    assert_eq!(state.mode, EditorMode::Normal);
+    assert_eq!(state.cursor_row, 0);
+    assert_eq!(state.cursor_col, 0);
+    assert_eq!(state.should_quit, false);
+    assert_eq!(state.clipboard, None);
+    assert_eq!(state.save_file, None);
+    assert_eq!(state.history_position, 0);
+    assert_eq!(state.current_input, "");
+    assert_eq!(state.highlight_color, 1);
+    assert!(state.highlighted_cells.is_empty());
+    assert!(state.command_history.is_empty());
+}
+
+#[test]
+fn test_mode_display() {
+    let mut state = EditorState::new();
+    assert_eq!(state.mode_display(), "NORMAL");
+    state.mode = EditorMode::Insert;
+    assert_eq!(state.mode_display(), "INSERT");
+}
+
+#[test]
+fn test_move_cursor() {
+    let mut state = EditorState::new();
+    let mut sheet = Spreadsheet::create(10, 10).unwrap();
+
+    // Test right movement
+    state.move_cursor('l', &mut sheet);
+    assert_eq!(state.cursor_col, 1);
+    assert_eq!(state.cursor_row, 0);
+
+    // Test down movement
+    state.move_cursor('j', &mut sheet);
+    assert_eq!(state.cursor_col, 1);
+    assert_eq!(state.cursor_row, 1);
+
+    // Test left movement
+    state.move_cursor('h', &mut sheet);
+    assert_eq!(state.cursor_col, 0);
+    assert_eq!(state.cursor_row, 1);
+
+    // Test up movement
+    state.move_cursor('k', &mut sheet);
+    assert_eq!(state.cursor_col, 0);
+    assert_eq!(state.cursor_row, 0);
+
+    // Test edge cases - cannot move beyond boundaries
+    // Left edge
+    state.cursor_col = 0;
+    state.move_cursor('h', &mut sheet);
+    assert_eq!(state.cursor_col, 0);
+
+    // Top edge
+    state.cursor_row = 0;
+    state.move_cursor('k', &mut sheet);
+    assert_eq!(state.cursor_row, 0);
+
+    // Right edge
+    state.cursor_col = sheet.cols - 1;
+    state.move_cursor('l', &mut sheet);
+    assert_eq!(state.cursor_col, sheet.cols - 1);
+
+    // Bottom edge
+    state.cursor_row = sheet.rows - 1;
+    state.move_cursor('j', &mut sheet);
+    assert_eq!(state.cursor_row, sheet.rows - 1);
+
+    // Invalid direction
+    state.cursor_row = 5;
+    state.cursor_col = 5;
+    state.move_cursor('x', &mut sheet);
+    assert_eq!(state.cursor_row, 5);
+    assert_eq!(state.cursor_col, 5);
+}
+
+#[test]
+fn test_add_to_history() {
+    let mut state = EditorState::new();
+    
+    // Add first command
+    state.add_to_history("A1=10");
+    assert_eq!(state.command_history.len(), 1);
+    assert_eq!(state.command_history[0], "A1=10");
+    assert_eq!(state.history_position, 1);
+
+    // Add second command
+    state.add_to_history("B1=20");
+    assert_eq!(state.command_history.len(), 2);
+    assert_eq!(state.command_history[1], "B1=20");
+    assert_eq!(state.history_position, 2);
+
+    // Empty commands should not be added
+    state.add_to_history("");
+    assert_eq!(state.command_history.len(), 2);
+
+    // Whitespace-only commands should not be added
+    state.add_to_history("   ");
+    assert_eq!(state.command_history.len(), 2);
+
+    // Duplicate of the last command should not be added
+    state.add_to_history("B1=20");
+    assert_eq!(state.command_history.len(), 2);
+    
+    // But a different command should be added
+    state.add_to_history("C1=30");
+    assert_eq!(state.command_history.len(), 3);
+    assert_eq!(state.command_history[2], "C1=30");
+    assert_eq!(state.history_position, 3);
+}
+
+#[test]
+fn test_adjust_viewport() {
+    // Starting state
+    let state = EditorState {
+        mode: EditorMode::Normal,
+        cursor_row: 5,
+        cursor_col: 5,
+        clipboard: None,
+        should_quit: false,
+        save_file: None,
+        command_history: Vec::new(),
+        history_position: 0,
+        current_input: String::new(),
+        highlighted_cells: HashSet::new(),
+        highlight_color: 1,
+    };
+
+    // Test 1: Cursor is within viewport
+    let mut sheet = Spreadsheet::create(20, 20).unwrap();
+    sheet.viewport_row = 0;
+    sheet.viewport_col = 0;
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_row, 0);
+    assert_eq!(sheet.viewport_col, 0);
+
+    // Test 2: Cursor is below viewport
+    let mut sheet = Spreadsheet::create(20, 20).unwrap();
+    sheet.viewport_row = 0;
+    sheet.viewport_col = 0;
+    let state = EditorState { cursor_row: 15, cursor_col: 5, ..state };
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_row, 6);
+    assert_eq!(sheet.viewport_col, 0);
+
+    // Test 3: Cursor is to the right of viewport
+    let mut sheet = Spreadsheet::create(20, 20).unwrap();
+    sheet.viewport_row = 0;
+    sheet.viewport_col = 0;
+    let state = EditorState { cursor_row: 5, cursor_col: 15, ..state };
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_row, 0);
+    assert_eq!(sheet.viewport_col, 6);
+
+    // Test 4: Cursor is above viewport
+    let mut sheet = Spreadsheet::create(20, 20).unwrap();
+    sheet.viewport_row = 10;
+    sheet.viewport_col = 0;
+    let state = EditorState { cursor_row: 5, cursor_col: 5, ..state };
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_row, 5);
+    assert_eq!(sheet.viewport_col, 0);
+
+    // Test 5: Cursor is to the left of viewport
+    let mut sheet = Spreadsheet::create(20, 20).unwrap();
+    sheet.viewport_row = 0;
+    sheet.viewport_col = 10;
+    let state = EditorState { cursor_row: 5, cursor_col: 5, ..state };
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_row, 0);
+    assert_eq!(sheet.viewport_col, 5);
+    
+    // Test 6: Edge case - cursor at (0,0) with viewport elsewhere
+    let mut sheet = Spreadsheet::create(20, 20).unwrap();
+    sheet.viewport_row = 5;
+    sheet.viewport_col = 5;
+    let state = EditorState { cursor_row: 0, cursor_col: 0, ..state };
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_row, 0);
+    assert_eq!(sheet.viewport_col, 0);
+    
+    // Test 7: Edge case - cursor at max position with viewport at start
+    let mut sheet = Spreadsheet::create(20, 20).unwrap();
+    sheet.viewport_row = 0;
+    sheet.viewport_col = 0;
+    let state = EditorState { cursor_row: 19, cursor_col: 19, ..state };
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_row, 10);
+    assert_eq!(sheet.viewport_col, 10);
+}
+
+#[test]
+fn test_parse_cell_ref() {
+    let state = EditorState::new();
+    let sheet = Spreadsheet::create(20, 26).unwrap();
+    
+    // This is a private method, so we need to test it indirectly
+    // We can do this by testing methods that use it or testing
+    // the behavior it enables. Let's make sure cursor_to_cell_ref works.
+    
+    let mut editor = EditorState::new();
+    editor.cursor_row = 0;
+    editor.cursor_col = 0;
+    assert_eq!(editor.cursor_to_cell_ref(&sheet), "A1");
+    
+    editor.cursor_row = 2;
+    editor.cursor_col = 3;
+    assert_eq!(editor.cursor_to_cell_ref(&sheet), "D3");
+    
+    editor.cursor_row = 19;
+    editor.cursor_col = 25;
+    assert_eq!(editor.cursor_to_cell_ref(&sheet), "Z20");
+}
+
+#[test]
+fn test_get_cell_color_code() {
+    let mut state = EditorState::new();
+    let sheet = Spreadsheet::create(10, 10).unwrap();
+    
+    // Default color for non-highlighted cells is white
+    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[37m".to_string());
+    
+    // Add cell to highlighted cells
+    let cell_key = sheet.get_key(0, 0);
+    state.highlighted_cells.insert(cell_key as i16);
+    
+    // Test different highlight colors
+    state.highlight_color = 1; // Red
+    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[31m".to_string());
+    
+    state.highlight_color = 2; // Green
+    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[32m".to_string());
+    
+    state.highlight_color = 3; // Yellow
+    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[33m".to_string());
+    
+    state.highlight_color = 4; // Blue
+    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[34m".to_string());
+    
+    state.highlight_color = 5; // Magenta
+    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[35m".to_string());
+    
+    state.highlight_color = 6; // Cyan
+    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[36m".to_string());
+    
+    // Test invalid color (defaults to white)
+    state.highlight_color = 7;
+    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[37m".to_string());
+    
+    // Test another cell (not highlighted)
+    assert_eq!(state.get_cell_color_code(&sheet, 1, 1), "\x1B[37m".to_string());
+}
+
+#[test]
+fn test_cursor_to_cell_ref() {
+    let mut state = EditorState::new();
+    let sheet = Spreadsheet::create(10, 30).unwrap();
+
+    // Test simple cases
+    state.cursor_row = 0;
+    state.cursor_col = 0;
+    assert_eq!(state.cursor_to_cell_ref(&sheet), "A1");
+
+    state.cursor_row = 2;
+    state.cursor_col = 3;
+    assert_eq!(state.cursor_to_cell_ref(&sheet), "D3");
+
+    // Test multi-letter column names
+    state.cursor_row = 0;
+    state.cursor_col = 26;
+    assert_eq!(state.cursor_to_cell_ref(&sheet), "AA1");
+    
+    state.cursor_row = 9;
+    state.cursor_col = 29;
+    assert_eq!(state.cursor_to_cell_ref(&sheet), "AD10");
+}
+
+#[test]
+// fn test_set_cursor_cell_value() {
+//     // For this test, we need to mock the evaluator to avoid full integration testing
+//     // Instead, we'll focus on verifying the command format sent to the evaluator
+    
+//     let mut state = EditorState::new();
+//     let mut sheet = Spreadsheet::create(10, 10).unwrap();
+    
+//     // Test setting a simple integer value
+//     state.cursor_row = 0;
+//     state.cursor_col = 0;
+//     let result = state.set_cursor_cell_value(&mut sheet, "42");
+    
+//     // Verify the cell has the new value
+//     match sheet.get_cell(0, 0) {
+//         CellValue::Integer(value) => assert_eq!(*value, 42),
+//         _ => panic!("Expected Integer cell value"),
+//     }
+    
+//     // Test setting a formula
+//     state.cursor_row = 1;
+//     state.cursor_col = 1;
+//     let _ = state.set_cursor_cell_value(&mut sheet, "42");
+//     state.cursor_row = 2;
+//     state.cursor_col = 2;
+//     let result = state.set_cursor_cell_value(&mut sheet, "=B2");
+    
+//     // Verify the formula result
+//     match sheet.get_cell(2, 2) {
+//         CellValue::Integer(value) => assert_eq!(*value, 42),
+//         _ => panic!("Expected Integer cell value from formula"),
+//     }
+    
+//     // Verify cell metadata was updated
+//     let cell_key = sheet.get_key(2, 2);
+//     assert!(sheet.cell_meta.contains_key(&cell_key));
+// }
+
+#[test]
+fn test_editor_with_large_spreadsheet() {
+    // Test with a larger spreadsheet to ensure everything scales properly
+    let mut state = EditorState::new();
+    let mut sheet = Spreadsheet::create(100, 100).unwrap();
+    
+    // Navigate to a cell way outside the initial viewport
+    state.cursor_row = 50;
+    state.cursor_col = 50;
+    state.adjust_viewport(&mut sheet);
+    
+    // Ensure viewport adjusted correctly
+    assert!(sheet.viewport_row <= state.cursor_row);
+    assert!(sheet.viewport_row + 10 > state.cursor_row);
+    assert!(sheet.viewport_col <= state.cursor_col);
+    assert!(sheet.viewport_col + 10 > state.cursor_col);
+    
+    // Set a value at this position
+    let _ = state.set_cursor_cell_value(&mut sheet, "99");
+    
+    // Verify the cell value
+    match sheet.get_cell(50, 50) {
+        CellValue::Integer(value) => assert_eq!(*value, 99),
+        _ => panic!("Expected Integer cell value"),
+    }
+    
+    // Test cursor movement around edges
+    state.cursor_row = 99;
+    state.cursor_col = 99;
+    state.move_cursor('j', &mut sheet); // Try to move down (should stay at 99)
+    state.move_cursor('l', &mut sheet); // Try to move right (should stay at 99)
+    assert_eq!(state.cursor_row, 99);
+    assert_eq!(state.cursor_col, 99);
+}
+
+#[test]
+fn test_clipboard_functionality() {
+    let mut state = EditorState::new();
+    
+    // Set up clipboard with simple data
+    state.clipboard = Some((0, 0, CellValue::Integer(42), "=A1+B1".to_string()));
+    
+    // Verify clipboard contents
+    match &state.clipboard {
+        Some((row, col, value, formula)) => {
+            assert_eq!(*row, 0);
+            assert_eq!(*col, 0);
+            assert_eq!(*value, CellValue::Integer(42));
+            assert_eq!(*formula, "=A1+B1");
+        },
+        None => panic!("Expected clipboard to contain data"),
+    }
+    
+    // Clear clipboard
+    state.clipboard = None;
+    assert!(state.clipboard.is_none());
+}
+
+#[test]
+fn test_highlighting_cells() {
+    let mut state = EditorState::new();
+    let sheet = Spreadsheet::create(10, 10).unwrap();
+    
+    // Initially no cells are highlighted
+    assert!(state.highlighted_cells.is_empty());
+    
+    // Add some cells to highlighted set
+    let key1 = sheet.get_key(0, 0) as i16;
+    let key2 = sheet.get_key(1, 1) as i16;
+    let key3 = sheet.get_key(2, 2) as i16;
+    
+    state.highlighted_cells.insert(key1);
+    state.highlighted_cells.insert(key2);
+    state.highlighted_cells.insert(key3);
+    
+    assert_eq!(state.highlighted_cells.len(), 3);
+    assert!(state.highlighted_cells.contains(&key1));
+    assert!(state.highlighted_cells.contains(&key2));
+    assert!(state.highlighted_cells.contains(&key3));
+    
+    // Remove a cell from highlights
+    state.highlighted_cells.remove(&key2);
+    
+    assert_eq!(state.highlighted_cells.len(), 2);
+    assert!(state.highlighted_cells.contains(&key1));
+    assert!(!state.highlighted_cells.contains(&key2));
+    assert!(state.highlighted_cells.contains(&key3));
+    
+    // Clear all highlights
+    state.highlighted_cells.clear();
+    assert!(state.highlighted_cells.is_empty());
+}
+
+#[test]
+fn test_changing_highlight_color() {
+    let mut state = EditorState::new();
+    
+    // Default highlight color is 1 (red)
+    assert_eq!(state.highlight_color, 1);
+    
+    // Change to green
+    state.highlight_color = 2;
+    assert_eq!(state.highlight_color, 2);
+    
+    // Change to an invalid value (should be allowed as it just falls back to white in rendering)
+    state.highlight_color = 10;
+    assert_eq!(state.highlight_color, 10);
+}
+
+#[test]
+fn test_editor_save_file() {
+    let mut state = EditorState::new();
+    
+    // Initially no save file is set
+    assert!(state.save_file.is_none());
+    
+    // Set a save file
+    state.save_file = Some("test_spreadsheet.ss".to_string());
+    
+    match &state.save_file {
+        Some(filename) => assert_eq!(filename, "test_spreadsheet.ss"),
+        None => panic!("Expected save file to be set"),
+    }
+    
+    // Change save file
+    state.save_file = Some("new_filename.ss".to_string());
+    
+    match &state.save_file {
+        Some(filename) => assert_eq!(filename, "new_filename.ss"),
+        None => panic!("Expected save file to be set"),
+    }
+    
+    // Clear save file
+    state.save_file = None;
+    assert!(state.save_file.is_none());
+}
+
+#[test]
+fn test_command_history_navigation() {
+    let mut state = EditorState::new();
+    
+    // Add some commands to history
+    state.add_to_history("A1=10");
+    state.add_to_history("B1=20");
+    state.add_to_history("C1=30");
+    
+    assert_eq!(state.command_history.len(), 3);
+    assert_eq!(state.history_position, 3);
+    
+    // Move back in history
+    if state.history_position > 0 {
+        state.history_position -= 1;
+    }
+    assert_eq!(state.history_position, 2);
+    assert_eq!(state.command_history[state.history_position], "C1=30");
+    
+    // Move back again
+    if state.history_position > 0 {
+        state.history_position -= 1;
+    }
+    assert_eq!(state.history_position, 1);
+    assert_eq!(state.command_history[state.history_position], "B1=20");
+    
+    // Move forward
+    if state.history_position < state.command_history.len() {
+        state.history_position += 1;
+    }
+    assert_eq!(state.history_position, 2);
+    assert_eq!(state.command_history[state.history_position], "C1=30");
+}
+
+#[test]
+fn test_editor_mode_switching() {
+    let mut state = EditorState::new();
+    
+    // Default is normal mode
+    assert_eq!(state.mode, EditorMode::Normal);
+    
+    // Switch to insert mode
+    state.mode = EditorMode::Insert;
+    assert_eq!(state.mode, EditorMode::Insert);
+    
+    // Switch back to normal mode
+    state.mode = EditorMode::Normal;
+    assert_eq!(state.mode, EditorMode::Normal);
+}
+
+#[test]
+fn test_current_input_handling() {
+    let mut state = EditorState::new();
+    
+    // Initially empty
+    assert_eq!(state.current_input, "");
+    
+    // Set some input
+    state.current_input = "A1=42".to_string();
+    assert_eq!(state.current_input, "A1=42");
+    
+    // Clear input
+    state.current_input = "".to_string();
+    assert_eq!(state.current_input, "");
+}
 }

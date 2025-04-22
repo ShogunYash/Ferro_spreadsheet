@@ -1,6 +1,4 @@
 #V2
-j
-k
 :esc
 e
 Esc
@@ -98,4 +96,6 @@ B2=SUM(A1:A2)
 :w
 :q
 A1=2
+q
+l
 q
