@@ -106,6 +106,7 @@ fn main() {
                 CommandStatus::CmdUnrecognized => "unrecognized_cmd",
                 CommandStatus::CmdCircularRef => "circular_ref",
                 CommandStatus::CmdInvalidCell => "invalid_cell",
+                CommandStatus::CmdLockedCell => "locked_cell",
             };
         }
     }
