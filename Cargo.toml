@@ -3,7 +3,7 @@ name = "spreadsheet"
 version = "0.1.0"
 edition = "2024"
 authors = ["Ferro Spreadsheeter <cs1230592@iitd.ac.in>"]
-description = "A simple spreadsheet implementation in Rust"
+description = "A high perfromance spreadsheet implementation in Rust"
 
 # Release profile optimization settings
 [profile.release]
