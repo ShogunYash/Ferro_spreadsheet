@@ -263,117 +263,6 @@ impl Spreadsheet {
         }
     }
 
-    pub fn get_children(&self, key: i32) -> HashSet<i32> {
-        let mut children = HashSet::new();
-        if let Some(direct_children) = self.get_cell_children(key) {
-            children.extend(direct_children);
-        }
-        for range_child in &self.range_children {
-            if self.is_cell_in_range(key, range_child.start_key, range_child.end_key) {
-                children.insert(range_child.child_key);
-            }
-        }
-        children
-    }
-
-    pub fn print_spreadsheet_with_highlights(
-        &self,
-        target_key: i32,
-        highlight_parents: &HashSet<i32>,
-        highlight_children: &HashSet<i32>,
-    ) {
-        if !self.output_enabled {
-            return;
-        }
-        let start_row = self.viewport_row;
-        let start_col = self.viewport_col;
-        let display_row = min(self.rows - start_row, self.display_rows);
-        let display_col = min(self.cols - start_col, self.display_cols);
-
-        // Print column headers
-        print!("     ");
-        for i in 0..display_col {
-            print!("{:<8} ", self.get_column_name(start_col + i));
-        }
-        println!();
-
-        // Print rows with highlights
-        for i in 0..display_row {
-            print!("{:<4} ", start_row + i + 1);
-            for j in 0..display_col {
-                let row = start_row + i;
-                let col = start_col + j;
-                let key = self.get_key(row, col);
-                let cell_value = self.get_cell(row, col);
-                let value_str = match cell_value {
-                    CellValue::Integer(value) => value.to_string(),
-                    CellValue::Error => "ERR".to_string(),
-                };
-
-                let display_str = if value_str.len() > 8 {
-                    &value_str[..8]
-                } else {
-                    value_str.as_str()
-                };
-                let padding = 8 - display_str.len();
-                let pre_padding = if j > 0 { 1 } else { 0 };
-
-                // Apply highlights
-                let cell_str = if key == target_key {
-                    format!("\x1b[4m{}\x1b[0m", display_str) // Underline
-                } else if highlight_parents.contains(&key) {
-                    format!("\x1b[31m{}\x1b[0m", display_str) // Red for parents
-                } else if highlight_children.contains(&key) {
-                    format!("\x1b[32m{}\x1b[0m", display_str) // Green for children
-                } else {
-                    display_str.to_string()
-                };
-
-                // Format with pre-padding, cell content, padding, and trailing space
-                let formatted = format!("{}{}{} ", " ".repeat(pre_padding), cell_str, " ".repeat(padding));
-                print!("{}", formatted);
-            }
-            println!();
-        }
-    }
-
-    pub fn get_parents(&self, key: i32) -> HashSet<i32> {
-        let mut parents = HashSet::new();
-        if let Some(meta) = self.cell_meta.get(&key) {
-            let rem = meta.formula % 10;
-            if rem >= 5 && rem <= 9 {
-                let (start_row, start_col) = self.get_row_col(meta.parent1);
-                let (end_row, end_col) = self.get_row_col(meta.parent2);
-                for r in start_row..=end_row {
-                    for c in start_col..=end_col {
-                        let pkey = self.get_key(r, c);
-                        parents.insert(pkey);
-                    }
-                }
-            } else if rem == 0 {
-                if meta.parent1 >= 0 {
-                    parents.insert(meta.parent1);
-                }
-                if meta.parent2 >= 0 {
-                    parents.insert(meta.parent2);
-                }
-            } else if rem == 2 {
-                if meta.parent1 >= 0 {
-                    parents.insert(meta.parent1);
-                }
-            } else if rem == 3 {
-                if meta.parent2 >= 0 {
-                    parents.insert(meta.parent2);
-                }
-            } else if meta.formula == 82 || meta.formula == 102 {
-                if meta.parent1 >= 0 {
-                    parents.insert(meta.parent1);
-                }
-            }
-        }
-        parents
-    }
-
     pub fn scroll_to_cell(&mut self, cell: &str) -> CommandStatus {
         match parse_cell_reference(self, cell) {
             Ok((row, col)) => {
@@ -449,10 +338,6 @@ impl Spreadsheet {
         self.last_edited = Some((row, col));
     }
 
-    pub fn get_last_edited(&self) -> Option<(i16, i16)> {
-        self.last_edited
-    }
-
     pub fn scroll_to_last_edited(&mut self) {
         if let Some((row, col)) = self.last_edited {
             self.viewport_row = row;
@@ -476,10 +361,6 @@ impl Spreadsheet {
 mod tests {
     use super::*;
     use crate::cell::CellValue;
-
-    fn create_test_spreadsheet(rows: i16, cols: i16) -> Spreadsheet {
-        Spreadsheet::create(rows, cols).unwrap()
-    }
 
     #[test]
     fn test_create_valid_dimensions() {
@@ -613,16 +494,5 @@ mod tests {
         *sheet.get_mut_cell(1, 1) = CellValue::Error;
         sheet.output_enabled = true;
         sheet.print_spreadsheet(); // Should not panic
-    }
-
-    #[test]
-    fn test_get_children_range() {
-        let mut sheet = create_test_spreadsheet(5, 5);
-        let parent1 = sheet.get_key(0, 0);
-        let parent2 = sheet.get_key(1, 1);
-        let child = sheet.get_key(2, 2);
-        sheet.add_range_child(parent1, parent2, child);
-        let children = sheet.get_children(parent1);
-        assert!(children.contains(&child));
     }
 }

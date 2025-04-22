@@ -6,6 +6,7 @@ mod reevaluate_topo;
 mod spreadsheet;
 mod vim_mode;
 mod visualize_cells;
+mod extensions;
 use std::env;
 use std::io::{self, Write};
 use std::process;
