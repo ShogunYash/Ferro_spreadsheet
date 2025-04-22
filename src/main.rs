@@ -11,8 +11,6 @@ use std::io::{self, Write};
 use std::process;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-// use sys_info;  // Add the system information library
-
 use evaluator::handle_command;
 use spreadsheet::CommandStatus;
 use spreadsheet::Spreadsheet;

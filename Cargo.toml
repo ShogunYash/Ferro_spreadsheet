@@ -27,7 +27,6 @@ panic = "abort"     # Removes panic unwinding code
 incremental = false # Disables incremental compilation in release
 
 [dependencies]
-sys-info = "0.9.1"  # For memory stats
 petgraph = "0.6.4"  # Add this for graph visualization
 
 [[bin]]
