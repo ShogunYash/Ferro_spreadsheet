@@ -344,4 +344,21 @@ mod tests {
             &mut sleep_time
         ));
     }
+
+    #[test]
+    fn test_reevaluate_formula_div_by_zero() {
+        let mut sheet: Spreadsheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(0);
+        let parent1_key = sheet.get_key(0, 0);
+        let parent2_key = sheet.get_key(0, 1);
+        let meta = sheet.get_cell_meta(1, 1);
+        meta.parent1 = parent1_key;
+        meta.parent2 = parent2_key;
+        meta.formula = 30; // Division
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
+    }
+    
 }
