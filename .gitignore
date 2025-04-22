@@ -16,5 +16,9 @@
 *.timestamp
 target/
 sheet/target/
+*.dot
+*.png
+*.sheet
+
 
 
