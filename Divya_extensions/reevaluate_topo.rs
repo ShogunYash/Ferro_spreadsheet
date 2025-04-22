@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_reevaluate_formula_div_by_zero() {
-        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sheet: Spreadsheet = create_test_spreadsheet(5, 5);
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
         *sheet.get_mut_cell(0, 1) = CellValue::Integer(0);
         let parent1_key = sheet.get_key(0, 0);
