@@ -1,7 +1,7 @@
 use crate::cell::{CellValue, parse_cell_reference};
 use crate::spreadsheet::{CommandStatus, Spreadsheet};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Range {
     pub start_row: i16,
     pub start_col: i16,
