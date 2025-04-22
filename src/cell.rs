@@ -16,7 +16,7 @@ pub fn parse_cell_reference(
         return Err(CommandStatus::CmdUnrecognized);
     }
 
-    /// Find column/row split point in one pass
+    // Find column/row split point in one pass
     let mut split_idx = 0;
     let mut col_length = 0;
 
