@@ -9,6 +9,7 @@ use std::io::{self, Write};
 pub enum EditorMode {
     Normal,
     Insert,
+    
 }
 
 // Editor state structure
@@ -19,10 +20,11 @@ pub struct EditorState {
     pub clipboard: Option<(i16, i16, CellValue, String)>, // (row, col, value, formula)
     pub should_quit: bool,
     pub save_file: Option<String>,
-    // Add command history
+    // Command history
     pub command_history: Vec<String>,
     pub history_position: usize,
     pub current_input: String,
+    pub command_buffer: String,
 }
 
 impl EditorState {
@@ -37,10 +39,49 @@ impl EditorState {
             command_history: Vec::new(),
             history_position: 0,
             current_input: String::new(),
+            command_buffer: String::new(),
         }
     }
 
-    // Add these methods to handle command history
+    pub fn mode_display(&self) -> &str {
+        match self.mode {
+            EditorMode::Normal => "NORMAL",
+            EditorMode::Insert => "INSERT",
+            
+        }
+    }
+
+  
+
+    // Move cursor in the specified direction
+    pub fn move_cursor(&mut self, direction: char, sheet: &mut Spreadsheet) {
+        match direction {
+            'h' => {
+                if self.cursor_col > 0 {
+                    self.cursor_col -= 1
+                }
+            }
+            'j' => {
+                if self.cursor_row < sheet.rows - 1 {
+                    self.cursor_row += 1
+                }
+            }
+            'k' => {
+                if self.cursor_row > 0 {
+                    self.cursor_row -= 1
+                }
+            } // Fixed 'k' from 'u'
+            'l' => {
+                if self.cursor_col < sheet.cols - 1 {
+                    self.cursor_col += 1
+                }
+            }
+            _ => {}
+        }
+
+        // Ensure viewport contains cursor
+        self.adjust_viewport(sheet);
+    }
     pub fn add_to_history(&mut self, command: &str) {
         // Don't add empty commands or duplicates of the most recent command
         if command.trim().is_empty()
@@ -56,10 +97,11 @@ impl EditorState {
         self.history_position = self.command_history.len();
     }
 
+    // Navigate through command history
     pub fn navigate_history(&mut self, direction: &str) -> String {
         // If navigating history for the first time, save current input
         if self.history_position == self.command_history.len() && direction == "up" {
-            self.current_input = String::new(); // Save whatever might be in the current input
+            self.current_input = self.command_buffer.clone();
         }
 
         match direction {
@@ -93,42 +135,7 @@ impl EditorState {
         }
     }
 
-    pub fn mode_display(&self) -> &'static str {
-        match self.mode {
-            EditorMode::Normal => "NORMAL",
-            EditorMode::Insert => "INSERT",
-        }
-    }
 
-    // Move cursor in the specified direction
-    pub fn move_cursor(&mut self, direction: char, sheet: &mut Spreadsheet) {
-        match direction {
-            'h' => {
-                if self.cursor_col > 0 {
-                    self.cursor_col -= 1
-                }
-            }
-            'j' => {
-                if self.cursor_row < sheet.rows - 1 {
-                    self.cursor_row += 1
-                }
-            }
-            'k' => {
-                if self.cursor_row > 0 {
-                    self.cursor_row -= 1
-                }
-            } // Fixed 'k' from 'u'
-            'l' => {
-                if self.cursor_col < sheet.cols - 1 {
-                    self.cursor_col += 1
-                }
-            }
-            _ => {}
-        }
-
-        // Ensure viewport contains cursor
-        self.adjust_viewport(sheet);
-    }
 
     // Adjust spreadsheet viewport to contain cursor
     pub fn adjust_viewport(&self, sheet: &mut Spreadsheet) {

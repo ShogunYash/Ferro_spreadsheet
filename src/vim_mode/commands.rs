@@ -15,10 +15,16 @@ pub fn handle_vim_command(
     input: &str,
     state: &mut EditorState,
 ) -> CommandStatus {
+    if !input.trim().is_empty() {
+        state.add_to_history(input);
+    }
     // Handle mode-specific input
     match state.mode {
         EditorMode::Normal => handle_normal_mode_command(sheet, input, state),
         EditorMode::Insert => handle_insert_mode_command(sheet, input, state),
+       
+    
+
     }
 }
 
@@ -29,8 +35,13 @@ fn handle_normal_mode_command(
     state: &mut EditorState,
 ) -> CommandStatus {
     // Single character commands
+    //store the input add_history 
+    
+
     if input.len() == 1 {
         match input.chars().next().unwrap() {
+
+
             // Movement commands
             'h' | 'j' | 'k' | 'l' => {
                 state.move_cursor(input.chars().next().unwrap(), sheet);
@@ -55,6 +66,7 @@ fn handle_normal_mode_command(
 
     // File commands
     if input.starts_with(':') {
+
         let cmd = &input[1..];
 
         // :w - write file

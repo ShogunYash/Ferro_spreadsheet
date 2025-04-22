@@ -1,4 +1,3 @@
-// vim_mode/mod.rs
 mod commands;
 mod editor;
 
@@ -31,13 +30,31 @@ pub fn run_editor(sheet: &mut Spreadsheet, filename: Option<String>) {
         }
 
         let trimmed = input.trim();
+        
+        // Handle command history navigation keys
+        if trimmed == "\x10" {  // Ctrl+P for previous command
+            if !editor_state.command_history.is_empty() {
+                let prev_cmd = editor_state.navigate_history("up");
+                // Print the previous command on a new line for the user to see/copy
+                println!("\n[history] {}", prev_cmd);
+            }
+            continue;
+        } else if trimmed == "\x0e" {  // Ctrl+N for next command
+            let next_cmd = editor_state.navigate_history("down");
+            // Print the next command on a new line for the user to see/copy
+            println!("\n[history] {}", next_cmd);
+            continue;
+        } else {
+            // For regular commands, use the input as is
+            editor_state.command_buffer = trimmed.to_string();
+        }
 
         // Handle special command to exit vim mode
         if trimmed == ":q!" {
             break;
         }
 
-        // Process the command
+        // Process the command - note that history is now handled inside handle_vim_command
         let status = commands::handle_vim_command(sheet, trimmed, &mut editor_state);
 
         // Handle special case for Esc key in terminal
