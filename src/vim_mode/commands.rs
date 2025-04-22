@@ -254,3 +254,293 @@ fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus
         CommandStatus::CmdUnrecognized
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::spreadsheet::Spreadsheet;
+    use crate::cell::CellValue;
+
+    // Helper function to set up test environment
+    fn setup() -> (Spreadsheet, EditorState) {
+        let sheet = Spreadsheet::create(10, 10).unwrap();
+        let state = EditorState {
+            mode: EditorMode::Normal,
+            cursor_row: 0,
+            cursor_col: 0,
+            clipboard: None,
+            should_quit: false,
+            save_file: None,
+            command_history: Vec::new(),
+            history_position: 0,
+            current_input: String::new(),
+            highlighted_cells: Default::default(),
+            highlight_color: 1,
+        };
+        (sheet, state)
+    }
+
+    #[test]
+    fn test_normal_mode_movement() {
+        let (mut sheet, mut state) = setup();
+        
+        // Test 'l' movement (right)
+        let result = handle_vim_command(&mut sheet, "l", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert_eq!(state.cursor_col, 1);
+        assert_eq!(state.cursor_row, 0);
+        
+        // Test 'j' movement (down)
+        let result = handle_vim_command(&mut sheet, "j", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert_eq!(state.cursor_col, 1);
+        assert_eq!(state.cursor_row, 1);
+        
+        // Test 'h' movement (left)
+        let result = handle_vim_command(&mut sheet, "h", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert_eq!(state.cursor_col, 0);
+        assert_eq!(state.cursor_row, 1);
+        
+        // Test 'k' movement (up)
+        let result = handle_vim_command(&mut sheet, "k", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert_eq!(state.cursor_col, 0);
+        assert_eq!(state.cursor_row, 0);
+    }
+
+    #[test]
+    fn test_mode_switching() {
+        let (mut sheet, mut state) = setup();
+        
+        // Test switching to insert mode with 'i'
+        let result = handle_vim_command(&mut sheet, "i", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert_eq!(state.mode, EditorMode::Insert);
+        
+        // Test switching back to normal mode with Esc
+        let result =handle_vim_command(&mut sheet, "Esc", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert_eq!(state.mode, EditorMode::Normal);
+    }
+
+    #[test]
+    fn test_quit_command() {
+        let (mut sheet, mut state) = setup();
+        
+        // Test quit with 'q'
+        let result = handle_vim_command(&mut sheet, "q", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert!(state.should_quit);
+
+        // Reset flag
+        state.should_quit = false;
+
+        // Test quit with ':q'
+        let result = handle_vim_command(&mut sheet, ":q", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert!(state.should_quit);
+    }
+
+    #[test]
+    fn test_yank_paste_cell() {
+        let (mut sheet, mut state) = setup();
+        
+        // Set a value in the current cell
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(42);
+        
+        // Test yanking the cell
+        let result = handle_vim_command(&mut sheet, "y", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert!(state.clipboard.is_some());
+        if let Some((row, col, value, _)) = &state.clipboard {
+            assert_eq!(*row, 0);
+            assert_eq!(*col, 0);
+            assert_eq!(*value, CellValue::Integer(42));
+        }
+        
+        // Move cursor and paste
+        handle_vim_command(&mut sheet, "j", &mut state); // Move down
+        handle_vim_command(&mut sheet, "l", &mut state); // Move right
+        let result = handle_vim_command(&mut sheet, "p", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        
+        // Check if the value was pasted correctly
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(42));
+    }
+
+    #[test]
+    fn test_cut_cell() {
+        let (mut sheet, mut state) = setup();
+        
+        // Set a value in the current cell
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(42);
+        
+        // Test cutting the cell
+        let result = handle_vim_command(&mut sheet, "d", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        
+        // Check if the cell is now empty (0)
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
+        
+        // Check if the value was stored in clipboard
+        assert!(state.clipboard.is_some());
+        if let Some((row, col, value, _)) = &state.clipboard {
+            assert_eq!(*row, 0);
+            assert_eq!(*col, 0);
+            assert_eq!(*value, CellValue::Integer(42));
+        }
+    }
+
+    #[test]
+    fn test_insert_mode_editing() {
+        let (mut sheet, mut state) = setup();
+        
+        // Switch to insert mode
+        handle_vim_command(&mut sheet, "i", &mut state);
+        
+        // Enter a value in insert mode
+        let result = handle_vim_command(&mut sheet, "123", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        
+        // Check if the value was set correctly
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(123));
+        
+        // Check if cursor moved down after insertion (vim behavior)
+        assert_eq!(state.cursor_row, 1);
+        assert_eq!(state.cursor_col, 0);
+    }
+
+    #[test]
+    fn test_save_command() {
+        let (mut sheet, mut state) = setup();
+        
+        // Test save command with explicit filename
+        // Note: This is a mock test that checks if the filename is stored
+        // without actually writing to the filesystem
+        let result = handle_vim_command(&mut sheet, ":w test.csv", &mut state);
+        
+        // The actual save operation might fail in the test environment,
+        // but we can check if the filename was stored in the state
+        assert!(state.save_file.is_some());
+        assert_eq!(state.save_file.unwrap(), "test.csv");
+    }
+
+    #[test]
+    fn test_write_quit_command() {
+        let (mut sheet, mut state) = setup();
+        
+        // Test write and quit command with explicit filename
+        let result = handle_vim_command(&mut sheet, ":wq test.csv", &mut state);
+        
+        // Check if the filename was stored
+        assert!(state.save_file.is_some());
+        assert_eq!(state.save_file.unwrap(), "test.csv");
+        
+        // The should_quit flag may or may not be set depending on if the save was successful
+        // In a real test environment, this might not work unless we mock the file system
+    }
+
+    #[test]
+    fn test_paste_formula() {
+        let (mut sheet, mut state) = setup();
+        
+        // Create a cell with a formula (mock by directly setting the clipboard)
+        state.clipboard = Some((0, 0, CellValue::Integer(42), "A1+B1".to_string()));
+        
+        // Move cursor and paste
+        state.cursor_row = 1;
+        state.cursor_col = 1;
+        
+        // Paste the formula
+        let result = handle_vim_command(&mut sheet, "p", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        
+        // Check if the formula was applied (this is difficult to test directly)
+        // In a real test we'd need to check the cell metadata to verify the formula was set
+    }
+
+    #[test]
+    fn test_movement_boundaries() {
+        let (mut sheet, mut state) = setup();
+        
+        // Test movement at boundaries
+        // Move left at leftmost position
+        let result = handle_vim_command(&mut sheet, "h", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert_eq!(state.cursor_col, 0); // Should stay at 0
+        
+        // Move up at topmost position
+        let result = handle_vim_command(&mut sheet, "k", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert_eq!(state.cursor_row, 0); // Should stay at 0
+        
+        // Move to bottom-right corner
+        state.cursor_row = 9;
+        state.cursor_col = 9;
+        
+        // Move right at rightmost position
+        let result = handle_vim_command(&mut sheet, "l", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert_eq!(state.cursor_col, 9); // Should stay at 9
+        
+        // Move down at bottommost position
+        let result = handle_vim_command(&mut sheet, "j", &mut state);
+        assert_eq!(result, CommandStatus::CmdOk);
+        assert_eq!(state.cursor_row, 9); // Should stay at 9
+    }
+
+    #[test]
+    fn test_command_history() {
+        let (mut sheet, mut state) = setup();
+        
+        // Execute a command
+        handle_vim_command(&mut sheet, "i", &mut state);
+        
+        // Check if it was added to history
+        assert_eq!(state.command_history.len(), 1);
+        assert_eq!(state.command_history[0], "i");
+        
+        // Execute another command
+        handle_vim_command(&mut sheet, "123", &mut state);
+        
+        // Check if it was added to history
+        assert_eq!(state.command_history.len(), 2);
+        assert_eq!(state.command_history[1], "123");
+    }
+
+    #[test]
+    fn test_empty_input() {
+        let (mut sheet, mut state) = setup();
+        
+        // Test with empty input
+        let result = handle_vim_command(&mut sheet, "", &mut state);
+        
+        // Empty input should not change history
+        assert_eq!(state.command_history.len(), 0);
+    }
+
+    #[test]
+    fn test_paste_with_empty_clipboard() {
+        let (mut sheet, mut state) = setup();
+        
+        // Ensure clipboard is empty
+        state.clipboard = None;
+        
+        // Try to paste
+        let result = handle_vim_command(&mut sheet, "p", &mut state);
+        assert_eq!(result, CommandStatus::CmdUnrecognized);
+    }
+
+    #[test]
+    fn test_paste_error_value() {
+        let (mut sheet, mut state) = setup();
+        
+        // Set clipboard to contain an error value
+        state.clipboard = Some((0, 0, CellValue::Error, String::new()));
+        
+        // Try to paste
+        let result = handle_vim_command(&mut sheet, "p", &mut state);
+        assert_eq!(result, CommandStatus::CmdUnrecognized);
+    }
+}
