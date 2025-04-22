@@ -30,5 +30,5 @@ incremental = false # Disables incremental compilation in release
 petgraph = "0.6.4"  # Add this for graph visualization
 
 [[bin]]
-name = "divya_sheet"
-path = "Divya_extensions/main.rs"
+name = "spreadsheet"
+path = "src/main.rs"
