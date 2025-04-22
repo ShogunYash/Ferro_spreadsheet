@@ -6,8 +6,8 @@ mod reevaluate_topo;
 mod spreadsheet;
 mod vim_mode;
 mod visualize_cells;
-mod extensions_2;
 mod extensions;
+mod extensions_2;
 use std::env;
 use std::io::{self, Write};
 use std::process;
@@ -100,6 +100,30 @@ fn main() {
 
             let trimmed = input.trim(); // Remove any newline characters
             if trimmed == "q" {
+                // Add save functionality before quitting ask the user 
+                // if they want to save the spreadsheet
+                print!("Do you want to save the spreadsheet before quitting? (y/n): ");
+                io::stdout().flush().unwrap(); // Ensure the prompt is shown
+                // Take the user's response
+                let mut response = String::new();
+                io::stdin().read_line(&mut response).unwrap();
+                let response = response.trim(); // Remove any newline characters
+                if response == "y" {
+                    // Ask for the filename to save
+                    print!("Enter filename to save (default: {}): ", DEFAULT_FILENAME);
+                    io::stdout().flush().unwrap(); // Ensure the prompt is shown
+                    let mut filename = String::new();
+                    io::stdin().read_line(&mut filename).unwrap();
+                    let filename = filename.trim(); // Remove any newline characters
+                    
+                    // Use the default filename if the user didn't enter anything
+                    let save_filename = if filename.is_empty() {
+                        DEFAULT_FILENAME
+                    } else {
+                        filename
+                    };
+                    save_spreadsheet(&sheet, save_filename);
+                }
                 break;
             }
 

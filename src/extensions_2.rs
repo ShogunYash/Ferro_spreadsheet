@@ -10,22 +10,26 @@ use crate::cell::{CellValue,parse_cell_reference};
 pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
     let path = Path::new(filename);
     
-    // Open file for writing
+    // Open file for writing, always creating it if it doesn't exist
     let file = match OpenOptions::new()
         .write(true)
-        .create(true)
-        .truncate(true)
+        .create(true)      // Create the file if it doesn't exist
+        .truncate(true)    // Truncate (clear) the file if it exists
         .open(path)
     {
         Ok(file) => file,
-        Err(_) => return CommandStatus::CmdUnrecognized,
+        Err(e) => {
+            eprintln!("Failed to create or open file '{}': {}", filename, e);
+            return CommandStatus::CmdUnrecognized;
+        }
     };
 
     // Create a buffered writer
     let mut writer = BufWriter::new(file);
 
     // Write header with dimensions
-    if let Err(_) = writeln!(writer, "DIMS,{},{}", sheet.rows, sheet.cols) {
+    if let Err(e) = writeln!(writer, "DIMS,{},{}", sheet.rows, sheet.cols) {
+        eprintln!("Failed to write to file '{}': {}", filename, e);
         return CommandStatus::CmdUnrecognized;
     }
 
@@ -50,10 +54,16 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
                 // Write the cell value
                 match cell_value {
                     CellValue::Integer(val) => {
-                        write!(writer, "CELL,{},{}", cell_ref, val).unwrap();
+                        if let Err(e) = write!(writer, "CELL,{},{}", cell_ref, val) {
+                            eprintln!("Failed to write cell data to '{}': {}", filename, e);
+                            return CommandStatus::CmdUnrecognized;
+                        }
                     },
                     CellValue::Error => {
-                        write!(writer, "CELL,{},ERR", cell_ref).unwrap();
+                        if let Err(e) = write!(writer, "CELL,{},ERR", cell_ref) {
+                            eprintln!("Failed to write cell data to '{}': {}", filename, e);
+                            return CommandStatus::CmdUnrecognized;
+                        }
                     },
                 }
                 
@@ -75,17 +85,30 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
                             String::from("")
                         };
                         
-                        write!(writer, ",FORMULA,{},{},{}", 
-                            meta.formula, parent1_ref, parent2_ref).unwrap();
+                        if let Err(e) = write!(writer, ",FORMULA,{},{},{}", 
+                            meta.formula, parent1_ref, parent2_ref) {
+                            eprintln!("Failed to write formula data to '{}': {}", filename, e);
+                            return CommandStatus::CmdUnrecognized;
+                        }
                     }
                 }
                 
                 // End the line
-                writeln!(writer, "").unwrap();
+                if let Err(e) = writeln!(writer, "") {
+                    eprintln!("Failed to write to '{}': {}", filename, e);
+                    return CommandStatus::CmdUnrecognized;
+                }
             }
         }
     }
 
+    // Explicitly flush to ensure all data is written
+    if let Err(e) = writer.flush() {
+        eprintln!("Failed to flush data to '{}': {}", filename, e);
+        return CommandStatus::CmdUnrecognized;
+    }
+
+    eprintln!("Spreadsheet successfully saved to '{}'", filename);
     CommandStatus::CmdOk
 }
 
