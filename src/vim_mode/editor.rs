@@ -1,6 +1,5 @@
 // vim_mode/editor.rs
 use crate::cell::CellValue;
-use crate::evaluator::handle_command;
 use crate::spreadsheet::{CommandStatus, Spreadsheet};
 use std::io::{self, Write};
 
@@ -212,10 +211,39 @@ impl EditorState {
         // Get formula for current cell (if exists)
         let cell_key = sheet.get_key(self.cursor_row, self.cursor_col);
         let formula_str = if let Some(meta) = sheet.cell_meta.get(&cell_key) {
-            if meta.formula >= 0 {
-                // In a real implementation, you would fetch the formula string
-                // This is a placeholder
-                "Formula".to_string()
+            
+                if meta.formula != 0 {
+                    // Get the parent cells as references
+               //get the parents , and the formula code converted to the actual operation
+                    let parent1_ref = if meta.parent1 != -1 {
+                        let (p1_row, p1_col) = sheet.get_row_col(meta.parent1);
+                        format!("{}{}", sheet.get_column_name(p1_col), p1_row + 1)
+                    } else {
+                        String::from("")
+                    };
+                    
+                    let parent2_ref = if meta.parent2 != -1 {
+                        let (p2_row, p2_col) = sheet.get_row_col(meta.parent2);
+                        format!("{}{}", sheet.get_column_name(p2_col), p2_row + 1)
+                    } else {
+                        String::from("")
+                    };
+                    // Convert formula code to string
+                    if meta.formula==10{
+                        format!("{}+{}", parent1_ref, parent2_ref)
+                    } else if meta.formula==20{
+                        format!("{}-{}", parent1_ref, parent2_ref)
+                    } else if meta.formula==40{
+                        format!("{}*{}", parent1_ref, parent2_ref)
+                    } else if meta.formula==30{
+                        format!("{}/{}", parent1_ref, parent2_ref)
+                    } else {
+                        let (row, col) = sheet.get_row_col(cell_key);
+                        format!("{:?}", sheet.get_cell(row,col))
+                    }
+                    
+        
+                
             } else {
                 "".to_string()
             }
@@ -232,8 +260,11 @@ impl EditorState {
         );
 
         // If clipboard has content, show it
-        if let Some((_, _, value, _)) = &self.clipboard {
+        if let Some((_, _, value, formula)) = &self.clipboard {
             println!("Clipboard: {:?}", value);
+            if !formula.is_empty() {
+                println!("Formula: {:?}", formula);
+            }
         }
 
         io::stdout().flush().unwrap();

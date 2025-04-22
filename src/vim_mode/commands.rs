@@ -1,7 +1,8 @@
 // vim_mode/commands.rs
 use super::editor::{EditorMode, EditorState};
-use crate::evaluator;
+use crate::{evaluator, spreadsheet};
 use crate::spreadsheet::{CommandStatus, Spreadsheet};
+use std::cell;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write, BufWriter};
 use std::path::Path;
@@ -378,41 +379,78 @@ fn cut_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
     if status != CommandStatus::CmdOk {
         return status;
     }
+    let row = state.cursor_row;
+    let col = state.cursor_col;
 
-    // Then clear it by setting it to an empty value
-    let cell_ref = state.cursor_to_cell_ref(sheet);
 
-    // Use empty string to clear the cell
-    let command = format!("{}=", cell_ref);
-    evaluator::handle_command(sheet, &command, &mut 0.0);
+
+    *sheet.get_mut_cell(row, col) = CellValue::Integer(0);
+    
+    // Reset formula metadata
+    let cell_key = sheet.get_key(row, col);
+    if let Some(meta) = sheet.cell_meta.get_mut(&cell_key) {
+        meta.formula = -1;  // No formula
+        meta.parent1 = -1;  // No parents
+        meta.parent2 = -1;
+    }
+    
+    // Also remove this cell from any dependency tracking
+    graph::remove_all_parents(sheet,row, col);
     CommandStatus::CmdOk
 }
 
 // Copy (yank) the current cell
 fn yank_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
     // Get the cell reference string and value
-    let cell_ref = state.cursor_to_cell_ref(sheet);
     let cell_value = sheet.get_cell(state.cursor_row, state.cursor_col).clone();
 
     // Get the formula for the cell (if any)
     let cell_key = sheet.get_key(state.cursor_row, state.cursor_col);
     let formula = if let Some(meta) = sheet.cell_meta.get(&cell_key) {
-        if meta.formula >= 0 {
-            // In a real implementation, you would get the actual formula
-            // This is a placeholder
-            "placeholder_formula".to_string()
+        if meta.formula != -1 {
+            // Get the parent cells as references
+       //get the parents , and the formula code converted to the actual operation
+            let parent1_ref = if meta.parent1 != -1 {
+                let (p1_row, p1_col) = sheet.get_row_col(meta.parent1);
+                format!("{}{}", sheet.get_column_name(p1_col), p1_row + 1)
+            } else {
+                String::from("")
+            };
+            
+            let parent2_ref = if meta.parent2 != -1 {
+                let (p2_row, p2_col) = sheet.get_row_col(meta.parent2);
+                format!("{}{}", sheet.get_column_name(p2_col), p2_row + 1)
+            } else {
+                String::from("")
+            };
+            // Convert formula code to string
+            if meta.formula==10{
+                format!("{}+{}", parent1_ref, parent2_ref)
+            } else if meta.formula==20{
+                format!("{}-{}", parent1_ref, parent2_ref)
+            } else if meta.formula==40{
+                format!("{}*{}", parent1_ref, parent2_ref)
+            } else if meta.formula==30{
+                format!("{}/{}", parent1_ref, parent2_ref)
+            } else {
+                format!("{}", meta.formula)
+            }
+            
+             
         } else {
-            "".to_string()
-        }
+            String::new()
+    }
     } else {
-        "".to_string()
+        String::new()
     };
+
 
     // Store in clipboard
     state.clipboard = Some((state.cursor_row, state.cursor_col, cell_value, formula));
 
     CommandStatus::CmdOk
 }
+
 
 // Paste to the current cell
 fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
