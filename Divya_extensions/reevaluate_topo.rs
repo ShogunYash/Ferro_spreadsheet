@@ -13,6 +13,10 @@ pub fn sleep_fn(sheet: &mut Spreadsheet, row: i16, col: i16, value: i32, sleep_v
 
 pub fn reevaluate_formula(sheet: &mut Spreadsheet, row: i16, col: i16, sleep_val: &mut f64) {
 
+    if sheet.is_cell_locked(row, col) {
+        return;
+    }
+
     let cell_meta = sheet.get_cell_meta(row, col);
     let rem = cell_meta.formula % 10;
     let msb = cell_meta.formula / 10;
@@ -73,6 +77,9 @@ pub fn reevaluate_formula(sheet: &mut Spreadsheet, row: i16, col: i16, sleep_val
                         } else {
                             *sheet.get_mut_cell(row, col) = CellValue::Integer(p1_value / parent2);
                         }
+                    }
+                    8 => {
+                        *sheet.get_mut_cell(row, col) = CellValue::Integer(*p1_value);
                     }
                     _ => {
                         sleep_fn(sheet, row, col, *p1_value, sleep_val);

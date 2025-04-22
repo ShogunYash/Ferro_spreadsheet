@@ -17,6 +17,119 @@ fn resolve_cell_reference(sheet: &Spreadsheet, s: &str) -> Result<(i16, i16), Co
     }
 }
 
+fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
+    let meta = sheet.get_cell_meta_ref(row, col);
+    if meta.formula == -1 {
+        return "No formula".to_string();
+    }
+    let rem = meta.formula % 10;
+    let msb = meta.formula / 10;
+    let parent1 = meta.parent1;
+    let parent2 = meta.parent2;
+
+    match rem {
+        0 => {
+            let (left, right) = if parent1 >= 0 && parent2 >= 0 {
+                let (left_row, left_col) = sheet.get_row_col(parent1);
+                let (right_row, right_col) = sheet.get_row_col(parent2);
+                let left_name = sheet.get_cell_name(left_row, left_col);
+                let right_name = sheet.get_cell_name(right_row, right_col);
+                (left_name, right_name)
+            } else {
+                return "Invalid formula".to_string();
+            };
+            match msb {
+                1 => format!("{} + {}", left, right),
+                2 => format!("{} - {}", left, right),
+                4 => format!("{} * {}", left, right),
+                3 => format!("{} / {}", left, right),
+                _ => "Unknown operation".to_string(),
+            }
+        }
+        2 => {
+            let (left, right) = if parent1 >= 0 {
+                let (left_row, left_col) = sheet.get_row_col(parent1);
+                let left_name = sheet.get_cell_name(left_row, left_col);
+                (left_name, parent2.to_string())
+            } else {
+                return "Invalid formula".to_string();
+            };
+            match msb {
+                1 => format!("{} + {}", left, right),
+                2 => format!("{} - {}", left, right),
+                4 => format!("{} * {}", left, right),
+                3 => format!("{} / {}", left, right),
+                10 => format!("SLEEP({})", left),
+                _ => "Unknown operation".to_string(),
+            }
+        }
+        3 => {
+            let (left, right) = if parent2 >= 0 {
+                let (right_row, right_col) = sheet.get_row_col(parent2);
+                let right_name = sheet.get_cell_name(right_row, right_col);
+                (parent1.to_string(), right_name)
+            } else {
+                return "Invalid formula".to_string();
+            };
+            match msb {
+                1 => format!("{} + {}", left, right),
+                2 => format!("{} - {}", left, right),
+                4 => format!("{} * {}", left, right),
+                3 => format!("{} / {}", left, right),
+                _ => "Unknown operation".to_string(),
+            }
+        }
+        5 => {
+            let (start_row, start_col) = sheet.get_row_col(parent1);
+            let (end_row, end_col) = sheet.get_row_col(parent2);
+            let start_name = sheet.get_cell_name(start_row, start_col);
+            let end_name = sheet.get_cell_name(end_row, end_col);
+            format!("SUM({}:{})", start_name, end_name)
+        }
+        6 => {
+            let (start_row, start_col) = sheet.get_row_col(parent1);
+            let (end_row, end_col) = sheet.get_row_col(parent2);
+            let start_name = sheet.get_cell_name(start_row, start_col);
+            let end_name = sheet.get_cell_name(end_row, end_col);
+            format!("AVG({}:{})", start_name, end_name)
+        }
+        7 => {
+            let (start_row, start_col) = sheet.get_row_col(parent1);
+            let (end_row, end_col) = sheet.get_row_col(parent2);
+            let start_name = sheet.get_cell_name(start_row, start_col);
+            let end_name = sheet.get_cell_name(end_row, end_col);
+            format!("MIN({}:{})", start_name, end_name)
+        }
+        8 => {
+            let (start_row, start_col) = sheet.get_row_col(parent1);
+            let (end_row, end_col) = sheet.get_row_col(parent2);
+            let start_name = sheet.get_cell_name(start_row, start_col);
+            let end_name = sheet.get_cell_name(end_row, end_col);
+            format!("MAX({}:{})", start_name, end_name)
+        }
+        9 => {
+            let (start_row, start_col) = sheet.get_row_col(parent1);
+            let (end_row, end_col) = sheet.get_row_col(parent2);
+            let start_name = sheet.get_cell_name(start_row, start_col);
+            let end_name = sheet.get_cell_name(end_row, end_col);
+            format!("STDEV({}:{})", start_name, end_name)
+        }
+        _ => {
+            if meta.formula == 82 {
+                let (left_row, left_col) = sheet.get_row_col(parent1);
+                let left_name = sheet.get_cell_name(left_row, left_col);
+                left_name
+            } else if meta.formula == 102 {
+                let (left_row, left_col) = sheet.get_row_col(parent1);
+                let left_name = sheet.get_cell_name(left_row, left_col);
+                format!("SLEEP({})", left_name)
+            } else {
+                "Unknown formula".to_string()
+            }
+        }
+    }
+}
+
 pub fn handle_sleep(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -430,6 +543,17 @@ pub fn handle_command(
                 let parents = sheet.get_parents(target_key);
                 let children = sheet.get_children(target_key);
                 return (CommandStatus::CmdOk, Some((target_key, parents, children)));
+            }
+            Err(status) => return (status, None),
+        }
+    }
+    if trimmed.starts_with("formula ") {
+        let cell_ref = trimmed[8..].trim();
+        match resolve_cell_reference(sheet, cell_ref) {
+            Ok((row, col)) => {
+                let formula_str = get_formula_string(sheet, row, col);
+                println!("{}", formula_str);
+                return (CommandStatus::CmdOk, None);
             }
             Err(status) => return (status, None),
         }

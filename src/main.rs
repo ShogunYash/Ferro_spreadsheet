@@ -11,8 +11,6 @@ use std::io::{self, Write};
 use std::process;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-// use sys_info;  // Add the system information library
-
 use evaluator::handle_command;
 use spreadsheet::CommandStatus;
 use spreadsheet::Spreadsheet;
@@ -72,7 +70,7 @@ fn main() {
         // Main loop for command input
         loop {
             sheet.print_spreadsheet();
-            print!("[{:.1}s ({}) > ", last_time, last_status);
+            print!("[{:.1}] ({}) > ", last_time, last_status);
             io::stdout().flush().unwrap(); // Ensure the prompt is shown
 
             input.clear();

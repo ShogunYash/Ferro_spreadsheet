@@ -107,6 +107,15 @@ impl Spreadsheet {
         self.cell_meta.entry(key).or_insert_with(CellMeta::new)
     }
 
+    pub fn get_cell_meta_ref(&self, row: i16, col: i16) -> &CellMeta {
+        let key = self.get_key(row, col);
+        self.cell_meta.get(&key).unwrap_or(&CellMeta {
+            formula: -1,
+            parent1: -1,
+            parent2: -1,
+        })
+    }
+
     pub fn get_column_name(&self, mut col: i16) -> String {
         let mut temp_col = col + 1;
         let mut len = 0;
@@ -211,7 +220,7 @@ impl Spreadsheet {
                     CellValue::Integer(value) => value.to_string(),
                     CellValue::Error => "ERR".to_string(),
                 };
-                print!("{:<8.8} ", value_str); 
+                print!("{:<8.8} ", value_str);
             }
             println!();
         }
@@ -230,14 +239,14 @@ impl Spreadsheet {
         let start_col = self.viewport_col;
         let display_row = min(self.rows - start_row, self.display_rows);
         let display_col = min(self.cols - start_col, self.display_cols);
-        
+
         // Print column headers
         print!("     ");
         for i in 0..display_col {
             print!("{:<8} ", self.get_column_name(start_col + i));
         }
         println!();
-        
+
         // Print rows with highlights
         for i in 0..display_row {
             print!("{:<4} ", start_row + i + 1);
@@ -250,7 +259,7 @@ impl Spreadsheet {
                     CellValue::Integer(value) => value.to_string(),
                     CellValue::Error => "ERR".to_string(),
                 };
-                
+
                 let display_str = if value_str.len() > 8 {
                     &value_str[..8]
                 } else {
@@ -258,7 +267,7 @@ impl Spreadsheet {
                 };
                 let padding = 8 - display_str.len();
                 let pre_padding = if j > 0 { 1 } else { 0 };
-                
+
                 // Apply highlights
                 let cell_str = if key == target_key {
                     format!("\x1b[4m{}\x1b[0m", display_str) // Underline
@@ -269,7 +278,7 @@ impl Spreadsheet {
                 } else {
                     display_str.to_string()
                 };
-                
+
                 // Format with pre-padding, cell content, padding, and trailing space
                 let formatted = format!("{}{}{} ", " ".repeat(pre_padding), cell_str, " ".repeat(padding));
                 print!("{}", formatted);
@@ -404,6 +413,17 @@ impl Spreadsheet {
             self.viewport_row = row;
             self.viewport_col = col;
         }
+    }
+
+    pub fn get_cell_name(&self, row: i16, col: i16) -> String {
+        for (name, range) in &self.named_ranges {
+            if range.start_row == row && range.start_col == col &&
+               range.end_row == row && range.end_col == col {
+                return name.clone();
+            }
+        }
+        let col_name = self.get_column_name(col);
+        format!("{}{}", col_name, row + 1)
     }
 }
 

@@ -46,7 +46,7 @@ fn main() {
     sheet.print_spreadsheet();
     loop {
         // sheet.print_spreadsheet();
-        print!("[{:.1}s ({}) > ", last_time, last_status);
+        print!("[{:.1}] ({}) > ", last_time, last_status);
         io::stdout().flush().unwrap();
         input.clear();
         if io::stdin().read_line(&mut input).unwrap() == 0 {
