@@ -72,7 +72,7 @@ fn main() {
         // Main loop for command input
         loop {
             sheet.print_spreadsheet();
-            print!("[{:.1}s ({}) > ", last_time, last_status);
+            print!("[{:.1}] ({}) > ", last_time, last_status);
             io::stdout().flush().unwrap(); // Ensure the prompt is shown
 
             input.clear();
