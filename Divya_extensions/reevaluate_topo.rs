@@ -78,6 +78,9 @@ pub fn reevaluate_formula(sheet: &mut Spreadsheet, row: i16, col: i16, sleep_val
                             *sheet.get_mut_cell(row, col) = CellValue::Integer(p1_value / parent2);
                         }
                     }
+                    8 => {
+                        *sheet.get_mut_cell(row, col) = CellValue::Integer(*p1_value);
+                    }
                     _ => {
                         sleep_fn(sheet, row, col, *p1_value, sleep_val);
                     }
