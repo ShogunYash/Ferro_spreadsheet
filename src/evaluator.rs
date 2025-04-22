@@ -3,7 +3,7 @@ use crate::formula::parse_range;
 use crate::formula::{eval_avg, eval_max, eval_min, eval_variance, sum_value};
 use crate::graph::{add_children, remove_all_parents};
 use crate::reevaluate_topo::{sleep_fn, toposort_reval_detect_cycle};
-use crate::spreadsheet::{CommandStatus, Spreadsheet, MAX_DISPLAY};
+use crate::spreadsheet::{CommandStatus, Spreadsheet, HighlightType};
 use crate::formula::Range;
 use crate::extensions::get_formula_string;
 
@@ -507,18 +507,6 @@ pub fn handle_command(
         return sheet.scroll_to_cell(cell_ref);
     }
 
-    if trimmed.starts_with("display ") {
-        let num_str = trimmed.get(8..).unwrap_or("").trim();
-        match num_str.parse::<i16>() {
-            Ok(num) if num > 0 && num <= MAX_DISPLAY => {
-                sheet.display_rows = num;
-                sheet.display_cols = num;
-                return CommandStatus::CmdOk;
-            }
-            _ => return CommandStatus::CmdUnrecognized,
-        }
-    }
-
     if trimmed.starts_with("lock_cell ") {
         let lock_target = trimmed.get(10..).unwrap_or("").trim();
         if lock_target.contains(':') {
@@ -597,6 +585,42 @@ pub fn handle_command(
             }
             Err(status) => return status,
         }
+    }
+
+    // Check for highlight commands
+    if trimmed.starts_with("HLP ") {
+        let cell_ref = &trimmed[4..];
+        if let Ok((row, col)) = parse_cell_reference(sheet, cell_ref) {
+            sheet.set_highlight(row, col, HighlightType::Parent);
+            return CommandStatus::CmdOk;
+        } else {
+            return CommandStatus::CmdInvalidCell;
+        }
+    }
+    
+    if trimmed.starts_with("HLC ") {
+        let cell_ref = &trimmed[4..];
+        if let Ok((row, col)) = parse_cell_reference(sheet, cell_ref) {
+            sheet.set_highlight(row, col, HighlightType::Child);
+            return CommandStatus::CmdOk;
+        } else {
+            return CommandStatus::CmdInvalidCell;
+        }
+    }
+    
+    if trimmed.starts_with("HLPC ") {
+        let cell_ref = &trimmed[5..];
+        if let Ok((row, col)) = parse_cell_reference(sheet, cell_ref) {
+            sheet.set_highlight(row, col, HighlightType::Both);
+            return CommandStatus::CmdOk;
+        } else {
+            return CommandStatus::CmdInvalidCell;
+        }
+    }
+    
+    if trimmed == "HLOFF" {
+        sheet.disable_highlight();
+        return CommandStatus::CmdOk;
     }
 
     // Check for cell assignment using byte search for '='
@@ -867,17 +891,17 @@ mod tests {
         assert_eq!(sheet.viewport_col, 1);
     }
 
-    #[test]
-    fn test_handle_command_display() {
-        let mut sheet = create_test_spreadsheet(20, 20);
-        let mut sleep_time = 0.0;
-        assert_eq!(
-            handle_command(&mut sheet, "display 5", &mut sleep_time),
-            CommandStatus::CmdOk
-        );
-        assert_eq!(sheet.display_rows, 5);
-        assert_eq!(sheet.display_cols, 5);
-    }
+    // #[test]
+    // fn test_handle_command_display() {
+    //     let mut sheet = create_test_spreadsheet(20, 20);
+    //     let mut sleep_time = 0.0;
+    //     assert_eq!(
+    //         handle_command(&mut sheet, "display 5", &mut sleep_time),
+    //         CommandStatus::CmdOk
+    //     );
+    //     assert_eq!(sheet.display_rows, 5);
+    //     assert_eq!(sheet.display_cols, 5);
+    // }
 
     #[test]
     fn test_handle_command_lock_cell() {
