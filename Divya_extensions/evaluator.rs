@@ -350,7 +350,7 @@ pub fn evaluate_formula(
             return CommandStatus::CmdUnrecognized;
         }
         let range_str = &expr[prefix_len..expr.len() - 1];
-        let range = if let Some(named_range) = sheet.named_ranges.get(range_str) {
+        let range: Range = if let Some(named_range) = sheet.named_ranges.get(range_str) {
             named_range.clone()
         } else {
             match parse_range(sheet, range_str) {
@@ -512,6 +512,7 @@ pub fn handle_command(
             }
         }
     }
+
     if trimmed.starts_with("name ") {
         let parts: Vec<&str> = trimmed[5..].split_whitespace().collect();
         if parts.len() == 2 {
@@ -533,6 +534,7 @@ pub fn handle_command(
         }
         return (CommandStatus::CmdUnrecognized, None);
     }
+
     if trimmed.starts_with("history ") {
         let cell_ref = trimmed[8..].trim();
         return match resolve_cell_reference(sheet, cell_ref) {
@@ -551,6 +553,7 @@ pub fn handle_command(
             Err(status) => (status, None),
         };
     }
+
     if trimmed.starts_with("high_dep ") {
         let cell_ref = trimmed[9..].trim();
         match resolve_cell_reference(sheet, cell_ref) {
@@ -563,6 +566,7 @@ pub fn handle_command(
             Err(status) => return (status, None),
         }
     }
+    
     if trimmed.starts_with("formula ") {
         let cell_ref = trimmed[8..].trim();
         match resolve_cell_reference(sheet, cell_ref) {
