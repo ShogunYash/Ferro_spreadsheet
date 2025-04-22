@@ -424,7 +424,7 @@ pub fn handle_command(
     }
     if trimmed.starts_with("high_dep ") {
         let cell_ref = trimmed[9..].trim();
-        match parse_cell_reference(sheet, cell_ref) {
+        match resolve_cell_reference(sheet, cell_ref) {
             Ok((row, col)) => {
                 let target_key = sheet.get_key(row, col);
                 let parents = sheet.get_parents(target_key);
