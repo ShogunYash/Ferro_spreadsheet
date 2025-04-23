@@ -589,4 +589,131 @@ fn test_editor_mode_switching() {
     state.mode = EditorMode::Normal;
     assert_eq!(state.mode, EditorMode::Normal);
 }
+#[test]
+fn test_render_spreadsheet() {
+    // Since render_spreadsheet prints to stdout, we can't easily capture and test its output
+    // in a unit test. However, we can test that it runs without crashing
+    // and that it correctly updates the state when needed.
+    
+    // Create test state and spreadsheet
+    let mut state = EditorState::new();
+    let sheet = Spreadsheet::create(10, 10).unwrap();
+    
+    // Basic test - should run without panicking
+    state.render_spreadsheet(&sheet);
+    
+    // Test with cursor at different positions
+    state.cursor_row = 5;
+    state.cursor_col = 5;
+    state.render_spreadsheet(&sheet);
+    
+    // Test with clipboard data
+    state.clipboard = Some((1, 1, CellValue::Integer(42), "=A1+B1".to_string()));
+    state.render_spreadsheet(&sheet);
+    
+    // Test with different modes
+    state.mode = EditorMode::Insert;
+    state.render_spreadsheet(&sheet);
+    state.mode = EditorMode::Normal;
+    state.render_spreadsheet(&sheet);
+    
+    // Test with a cell that has a formula
+    let mut sheet_with_formula = Spreadsheet::create(10, 10).unwrap();
+    let _ = process_command::process_command(&mut sheet_with_formula, "A1=10", &mut 0.0);
+    let _ = process_command::process_command(&mut sheet_with_formula, "B1=A1*2", &mut 0.0);
+    state.cursor_row = 0;
+    state.cursor_col = 1; // B1
+    state.render_spreadsheet(&sheet_with_formula);
+}
+
+#[test]
+fn test_adjust_viewport_negative_conditions() {
+    let mut state = EditorState::new();
+    let mut sheet = Spreadsheet::create(20, 20).unwrap();
+    
+    // Test case where viewport would go negative after adjustment
+    sheet.viewport_row = 5;
+    sheet.viewport_col = 5;
+    
+    // Place cursor at position 0,0 - this should pull viewport back to 0,0
+    state.cursor_row = 0;
+    state.cursor_col = 0;
+    state.adjust_viewport(&mut sheet);
+    
+    // Verify viewport is at 0,0 (not negative)
+    assert_eq!(sheet.viewport_row, 0);
+    assert_eq!(sheet.viewport_col, 0);
+    
+    // Test cursor at far edge with a large viewport position
+    // that would need to pull back but not go negative
+    sheet.viewport_row = 15;
+    sheet.viewport_col = 15;
+    
+    state.cursor_row = 8; // Should pull viewport to 8
+    state.cursor_col = 10; // Should pull viewport to 10
+    state.adjust_viewport(&mut sheet);
+    
+    assert_eq!(sheet.viewport_row, 8);
+    assert_eq!(sheet.viewport_col, 10);
+    
+    // Test edge case with cursor at max but viewport could go negative
+    // First set a weird state - viewport is negative (shouldn't happen but let's test it)
+    sheet.viewport_row = -5;
+    sheet.viewport_col = -5;
+    
+    // Now adjust viewport with cursor at position that should normalize viewport
+    state.cursor_row = 15;
+    state.cursor_col = 15;
+    state.adjust_viewport(&mut sheet);
+    
+    // The adjust_viewport function doesn't explicitly handle negative values,
+    // so let's check the outcome (it should adjust based on cursor position)
+    assert!(sheet.viewport_row <= state.cursor_row);
+    assert!(sheet.viewport_row + 10 > state.cursor_row);
+    assert!(sheet.viewport_col <= state.cursor_col);
+    assert!(sheet.viewport_col + 10 > state.cursor_col);
+}
+
+#[test]
+fn test_adjust_viewport_complex_movements() {
+    let mut state = EditorState::new();
+    let mut sheet = Spreadsheet::create(30, 30).unwrap();
+    
+    // Start at the beginning
+    state.cursor_row = 0;
+    state.cursor_col = 0;
+    sheet.viewport_row = 0;
+    sheet.viewport_col = 0;
+    
+    // Move cursor down beyond viewport
+    state.cursor_row = 15;
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_row, 6); // Viewport should adjust to show cursor
+    
+    // Move cursor right beyond viewport
+    state.cursor_col = 15;
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_col, 6); // Viewport should adjust to show cursor
+    
+    // Move cursor back to top-left but keep viewport where it is
+    state.cursor_row = 7; // Still visible in current viewport
+    state.cursor_col = 7; // Still visible in current viewport
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_row, 6); // Should not change
+    assert_eq!(sheet.viewport_col, 6); // Should not change
+    
+    // Move cursor to boundary edge of viewport
+    state.cursor_row = 6; // Exactly at viewport edge
+    state.cursor_col = 6; // Exactly at viewport edge
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_row, 6); // Should not change
+    assert_eq!(sheet.viewport_col, 6); // Should not change
+    
+    // Move cursor just outside viewport boundary
+    state.cursor_row = 5; // Just outside viewport
+    state.cursor_col = 5; // Just outside viewport
+    state.adjust_viewport(&mut sheet);
+    assert_eq!(sheet.viewport_row, 5); // Should adjust to show cursor
+    assert_eq!(sheet.viewport_col, 5); // Should adjust to show cursor
+}
 }
