@@ -13,6 +13,10 @@ pub fn handle_vim_command(
     state: &mut EditorState,
 ) -> CommandStatus {
     // Handle mode-specific input
+    // record the command in history
+    if !input.is_empty() {
+        state.command_history.push(input.to_string());
+    }
     match state.mode {
         EditorMode::Normal => handle_normal_mode_command(sheet, input, state),
         EditorMode::Insert => handle_insert_mode_command(sheet, input, state),
