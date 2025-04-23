@@ -23,6 +23,9 @@ pub struct EditorState {
     // Command history
     pub command_history: Vec<String>,
     pub history_position: usize,
+    pub command_string: String,
+    pub command_answer: String,
+    pub command_true: bool,
 }
 impl EditorState {
     pub fn new() -> Self {
@@ -35,6 +38,9 @@ impl EditorState {
             save_file: None,
             command_history: Vec::new(),
             history_position: 0,
+            command_string: String::new(),
+            command_answer: String::new(),
+            command_true: false,
         }
     }
 
@@ -301,6 +307,9 @@ fn test_adjust_viewport() {
         save_file: None,
         command_history: Vec::new(),
         history_position: 0,
+        command_string: String::new(),
+        command_answer: String::new(),
+        command_true: false,
     };
 
     // Test 1: Cursor is within viewport

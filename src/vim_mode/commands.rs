@@ -5,7 +5,7 @@ use crate::cell::CellValue;
 use crate::graph::{self, remove_all_parents};
 use crate::save_load::save_spreadsheet;
 use crate::process_command::process_command;
-use crate::formula::{parse_range, eval_avg,eval_max,eval_min,eval_variance,sum_value, Range};
+use crate::formula::{parse_range, eval_avg,eval_max,eval_min,eval_variance,sum_value};
 // Handle vim-specific commands
 pub fn handle_vim_command(
     sheet: &mut Spreadsheet,
