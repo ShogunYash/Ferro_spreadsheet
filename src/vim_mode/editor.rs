@@ -3,6 +3,7 @@ use crate::cell::CellValue;
 use crate::spreadsheet::{CommandStatus, Spreadsheet}; // <-- fix: import Spreadsheet as struct, not as trait
 use std::io::{self, Write};
 use std::collections::HashSet;
+use crate::extensions::get_formula_string; // <-- fix: import get_formula_string from extensions
 
 // Define editor modes
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -22,8 +23,6 @@ pub struct EditorState {
     // Command history
     pub command_history: Vec<String>,
     pub history_position: usize,
-    pub current_input: String,
-
     // Highlighted cells
     pub highlighted_cells: HashSet<i16>,
     pub highlight_color: u8, // Current highlighting color
@@ -39,7 +38,6 @@ impl EditorState {
             save_file: None,
             command_history: Vec::new(),
             history_position: 0,
-            current_input: String::new(),
             highlighted_cells: HashSet::new(),
             highlight_color: 1, // Default highlight color (red)
         }
@@ -122,50 +120,6 @@ impl EditorState {
         }
     }
 
-    // Helper function to parse cell reference
-    fn parse_cell_ref(&self, sheet: &Spreadsheet, cell_ref: &str) -> Option<(i16, i16)> {
-        // Parse cell reference like "A1" into row and column
-        let mut chars = cell_ref.chars();
-        
-        // Get column letter(s)
-        let mut col_str = String::new();
-        while let Some(c) = chars.next() {
-            if c.is_alphabetic() {
-                col_str.push(c.to_ascii_uppercase());
-            } else {
-                break;
-            }
-        }
-        
-        // Get row number
-        let mut row_str = String::new();
-        for c in cell_ref.chars().skip(col_str.len()) {
-            if c.is_numeric() {
-                row_str.push(c);
-            } else {
-                return None; // Invalid character in row
-            }
-        }
-        
-        // Convert row string to number (1-indexed to 0-indexed)
-        if let Ok(row_num) = row_str.parse::<i16>() {
-            if row_num > 0 && row_num <= sheet.rows {
-                // Calculate column index
-                let mut col_idx = 0;
-                for c in col_str.chars() {
-                    col_idx = col_idx * 26 + (c as i16 - 'A' as i16 + 1);
-                }
-                col_idx -= 1; // Convert to 0-indexed
-                
-                if col_idx >= 0 && col_idx < sheet.cols {
-                    return Some((row_num - 1, col_idx));
-                }
-            }
-        }
-        
-        None
-    }
-
     // Get ANSI color code for a given cell
     fn get_cell_color_code(&self, sheet: &Spreadsheet, row: i16, col: i16) -> String {
         let cell_key = sheet.get_key(row, col);
@@ -239,48 +193,18 @@ impl EditorState {
 
         // Get formula for current cell (if exists)
         let cell_key = sheet.get_key(self.cursor_row, self.cursor_col);
-        let formula_str = if let Some(meta) = sheet.cell_meta.get(&cell_key) {
-            if meta.formula != -1 {
-                // Get the parent cells as references
-                let parent1_ref = if meta.parent1 != -1 {
-                    let (p1_row, p1_col) = sheet.get_row_col(meta.parent1);
-                    format!("{}{}", sheet.get_column_name(p1_col), p1_row + 1)
-                } else {
-                    String::from("")
-                };
-                
-                let parent2_ref = if meta.parent2 != -1 {
-                    let (p2_row, p2_col) = sheet.get_row_col(meta.parent2);
-                    format!("{}{}", sheet.get_column_name(p2_col), p2_row + 1)
-                } else {
-                    String::from("")
-                };
-                
-                // Convert formula code to string
-                if meta.formula == 10 {
-                    format!("{}+{}", parent1_ref, parent2_ref)
-                } else if meta.formula == 20 {
-                    format!("{}-{}", parent1_ref, parent2_ref)
-                } else if meta.formula == 40 {
-                    format!("{}*{}", parent1_ref, parent2_ref)
-                } else if meta.formula == 30 {
-                    format!("{}/{}", parent1_ref, parent2_ref)
-                } else {
-                    let (row, col) = sheet.get_row_col(cell_key);
-                    format!("{:?}", sheet.get_cell(row, col))
-                }
+        let formula_str = 
+            if let Some(_meta) = sheet.cell_meta.get(&cell_key) {
+                get_formula_string(sheet, self.cursor_row, self.cursor_col)
             } else {
                 "".to_string()
-            }
-        } else {
-            "".to_string()
-        };
+            };
 
         println!("\nCursor at: {} - {}", cell_ref, formula_str);
 
         // Display mode
         println!(
-            "Mode: {} | Use hjkl to navigate, i to insert, Esc to exit insert mode",
+            "Mode: {} | Use h|j|k|l to navigate, i to insert, Esc to exit insert mode",
             self.mode_display()
         );
 
@@ -293,7 +217,7 @@ impl EditorState {
         }
 
         // Show highlighting commands
-        println!("Highlight: :hp CELL (parents), :hc CELL (children), :hf CELL (family)");
+        println!("Highlight: :HLP (parents), :HLC (children), :HLPC (family)");
 
         io::stdout().flush().unwrap();
     }
@@ -319,7 +243,6 @@ mod tests {
 
 use super::*;
 use crate::cell::CellValue;
-use crate::evaluator;
 use crate::spreadsheet::Spreadsheet;
 
 #[test]
@@ -332,7 +255,6 @@ fn test_new_editor_state() {
     assert_eq!(state.clipboard, None);
     assert_eq!(state.save_file, None);
     assert_eq!(state.history_position, 0);
-    assert_eq!(state.current_input, "");
     assert_eq!(state.highlight_color, 1);
     assert!(state.highlighted_cells.is_empty());
     assert!(state.command_history.is_empty());
@@ -447,7 +369,6 @@ fn test_adjust_viewport() {
         save_file: None,
         command_history: Vec::new(),
         history_position: 0,
-        current_input: String::new(),
         highlighted_cells: HashSet::new(),
         highlight_color: 1,
     };
@@ -517,7 +438,6 @@ fn test_adjust_viewport() {
 
 #[test]
 fn test_parse_cell_ref() {
-    let state = EditorState::new();
     let sheet = Spreadsheet::create(20, 26).unwrap();
     
     // This is a private method, so we need to test it indirectly
@@ -600,44 +520,6 @@ fn test_cursor_to_cell_ref() {
     state.cursor_col = 29;
     assert_eq!(state.cursor_to_cell_ref(&sheet), "AD10");
 }
-
-#[test]
-// fn test_set_cursor_cell_value() {
-//     // For this test, we need to mock the evaluator to avoid full integration testing
-//     // Instead, we'll focus on verifying the command format sent to the evaluator
-    
-//     let mut state = EditorState::new();
-//     let mut sheet = Spreadsheet::create(10, 10).unwrap();
-    
-//     // Test setting a simple integer value
-//     state.cursor_row = 0;
-//     state.cursor_col = 0;
-//     let result = state.set_cursor_cell_value(&mut sheet, "42");
-    
-//     // Verify the cell has the new value
-//     match sheet.get_cell(0, 0) {
-//         CellValue::Integer(value) => assert_eq!(*value, 42),
-//         _ => panic!("Expected Integer cell value"),
-//     }
-    
-//     // Test setting a formula
-//     state.cursor_row = 1;
-//     state.cursor_col = 1;
-//     let _ = state.set_cursor_cell_value(&mut sheet, "42");
-//     state.cursor_row = 2;
-//     state.cursor_col = 2;
-//     let result = state.set_cursor_cell_value(&mut sheet, "=B2");
-    
-//     // Verify the formula result
-//     match sheet.get_cell(2, 2) {
-//         CellValue::Integer(value) => assert_eq!(*value, 42),
-//         _ => panic!("Expected Integer cell value from formula"),
-//     }
-    
-//     // Verify cell metadata was updated
-//     let cell_key = sheet.get_key(2, 2);
-//     assert!(sheet.cell_meta.contains_key(&cell_key));
-// }
 
 #[test]
 fn test_editor_with_large_spreadsheet() {
@@ -824,21 +706,5 @@ fn test_editor_mode_switching() {
     // Switch back to normal mode
     state.mode = EditorMode::Normal;
     assert_eq!(state.mode, EditorMode::Normal);
-}
-
-#[test]
-fn test_current_input_handling() {
-    let mut state = EditorState::new();
-    
-    // Initially empty
-    assert_eq!(state.current_input, "");
-    
-    // Set some input
-    state.current_input = "A1=42".to_string();
-    assert_eq!(state.current_input, "A1=42");
-    
-    // Clear input
-    state.current_input = "".to_string();
-    assert_eq!(state.current_input, "");
 }
 }
