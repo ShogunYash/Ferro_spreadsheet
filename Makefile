@@ -1,4 +1,4 @@
-.PHONY: all clean run
+.PHONY: all clean run vim
 
 all: target/release/spreadsheet
 
@@ -11,6 +11,8 @@ clean:
 run: target/release/spreadsheet
 	./target/release/spreadsheet 999 18278
 
+vim: target/release/spreadsheet
+	./target/release/spreadsheet --vim 999 18278
 # # Makefile for Ferro_spreadsheet
 
 # # Detect the environment
