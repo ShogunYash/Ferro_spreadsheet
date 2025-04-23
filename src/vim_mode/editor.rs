@@ -142,6 +142,12 @@ impl EditorState {
                 "".to_string()
             };
 
+        if self.command_true{
+            println!("{}", self.command_string);
+            println!("\nResult: {}", self.command_answer);
+            self.command_true = false;
+        }
+        
         println!("\nCursor at: {} : {}", cell_ref, formula_str);
 
         // Display mode

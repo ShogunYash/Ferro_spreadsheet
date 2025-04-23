@@ -1,2 +1,10 @@
 #V2
+i
+q
+esc
+q
+E1=10
+C5=7
+V (A2:ZZZ99) SUM
+V (A2:ZZZ999) SUM
 q
