@@ -172,6 +172,7 @@ fn main() {
                 CommandStatus::CmdCircularRef => "circular_ref",
                 CommandStatus::CmdInvalidCell => "invalid_cell",
                 CommandStatus::CmdLockedCell => "locked_cell",
+                CommandStatus::CmdNotLockedCell => "not_locked_cell",
             };
         }
     }

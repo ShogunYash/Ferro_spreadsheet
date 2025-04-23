@@ -3,7 +3,7 @@ use crate::formula::parse_range;
 use crate::formula::{eval_avg, eval_max, eval_min, eval_variance, sum_value};
 use crate::graph::{add_children, remove_all_parents};
 use crate::reevaluate_topo::{sleep_fn, toposort_reval_detect_cycle};
-use crate::spreadsheet::{CommandStatus, Spreadsheet, HighlightType};
+use crate::spreadsheet::{CommandStatus, Spreadsheet, HighlightType, MAX_DISPLAY};
 use crate::formula::Range;
 use crate::extensions::get_formula_string;
 
@@ -498,6 +498,17 @@ pub fn handle_command(
         }
     }
 
+    if trimmed.starts_with("display ") {
+        let num_str = trimmed.get(8..).unwrap_or("").trim();
+        match num_str.parse::<i16>() {
+            Ok(num) if num > 0 && num <= MAX_DISPLAY => {
+                sheet.display = num;
+                return CommandStatus::CmdOk;
+            }
+            _ => return CommandStatus::CmdUnrecognized,
+        }
+    }
+
     // Check for scroll_to command with byte-based comparison
     if trimmed.len() > 10
         && &trimmed.as_bytes()[..9] == b"scroll_to"
@@ -531,6 +542,48 @@ pub fn handle_command(
                 }
                 Err(status) => return status,
             }
+        }
+    }
+
+    if trimmed.starts_with("unlock_cell ") {
+        let unlock_target = trimmed.get(11..).unwrap_or("").trim();
+        if unlock_target.contains(':') {
+            match parse_range(sheet, unlock_target) {
+                Ok(range) => {
+                    sheet.unlock_range(range);
+                    return CommandStatus::CmdOk;
+                }
+                Err(_) => return CommandStatus::CmdUnrecognized,
+            }
+        } else {
+            match resolve_cell_reference(sheet, unlock_target) {
+                Ok((row, col)) => {
+                    let range = Range {
+                        start_row: row,
+                        start_col: col,
+                        end_row: row,
+                        end_col: col,
+                    };
+                    sheet.unlock_range(range);
+                    return CommandStatus::CmdOk;
+                }
+                Err(status) => return status,
+            }
+        }
+    }
+
+    if trimmed.starts_with("is_locked "){
+        let cell_ref: &str = trimmed.get(10..).unwrap_or("").trim();
+        match resolve_cell_reference(sheet, cell_ref) {
+            Ok((row, col)) => {
+                if sheet.is_cell_locked(row, col) {
+                    return CommandStatus::CmdLockedCell;
+                }
+                else{
+                    return CommandStatus::CmdNotLockedCell;
+                }
+            }
+            Err(status) => return status,
         }
     }
 
