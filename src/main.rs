@@ -7,7 +7,7 @@ mod spreadsheet;
 mod vim_mode;
 mod visualize_cells;
 mod extensions;
-mod extensions_2;
+mod save_load;
 use std::env;
 use std::io::{self, Write};
 use std::process;
@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use evaluator::handle_command;
 use spreadsheet::CommandStatus;
 use spreadsheet::Spreadsheet;
-use crate::extensions_2::save_spreadsheet;
+use crate::save_load::{save_spreadsheet, load_spreadsheet};
 const DEFAULT_FILENAME: &str = "rust_spreadsheet.sheet";
 
 fn main() {
@@ -76,8 +76,8 @@ fn main() {
             }
             Some(DEFAULT_FILENAME.to_string())
         };
-
         vim_mode::run_editor(&mut sheet, filename);
+
     } else {
         let mut command_time = start.elapsed().as_secs_f64();
         let mut last_time = command_time; // Update last_time with the command time
@@ -125,6 +125,25 @@ fn main() {
                     save_spreadsheet(&sheet, save_filename);
                 }
                 break;
+            }
+
+            // Add "open" command to load a spreadsheet
+            if trimmed.starts_with("open ") {
+                let filename = trimmed[5..].trim();
+                if !filename.is_empty() {
+                    println!("Loading spreadsheet from '{}'...", filename);
+                    match load_spreadsheet(&mut sheet, filename) {
+                        CommandStatus::CmdOk => {
+                            println!("Spreadsheet successfully loaded from '{}'", filename);
+                            last_status = "ok";
+                        },
+                        _ => {
+                            eprintln!("Failed to load spreadsheet from '{}'", filename);
+                            last_status = "error";
+                        }
+                    }
+                    continue;
+                }
             }
 
             // Process the command and measure execution time
