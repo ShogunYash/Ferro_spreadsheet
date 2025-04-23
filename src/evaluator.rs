@@ -887,11 +887,11 @@ mod tests {
         let mut sheet = create_test_spreadsheet(5, 5);
         let mut sleep_time = 0.0;
         assert_eq!(
-            handle_command(&mut sheet, "visualize A1", &mut sleep_time),
+            handle_command(&mut sheet, "visual A1", &mut sleep_time),
             CommandStatus::CmdOk
         );
         assert_eq!(
-            handle_command(&mut sheet, "visualize Z9", &mut sleep_time),
+            handle_command(&mut sheet, "visual Z9", &mut sleep_time),
             CommandStatus::CmdInvalidCell
         );
     }
