@@ -1,10 +1,10 @@
 // vim_mode/commands.rs
 use super::editor::{EditorMode, EditorState};
-use crate::evaluator;
 use crate::spreadsheet::{CommandStatus, Spreadsheet};
 use crate::cell::CellValue;
 use crate::graph;
 use crate::save_load::save_spreadsheet;
+use crate::process_command::process_command;
 
 // Handle vim-specific commands
 pub fn handle_vim_command(
@@ -119,10 +119,8 @@ fn handle_normal_mode_command(
     }
 
     // If not handled as a vim command, pass it to the standard command handler
-    let mut sleep_time = 0.0;
-    let status = evaluator::handle_command(sheet, input, &mut sleep_time);
-    // add sleep time 
-    status
+    // will return status
+    process_command(sheet, input, &mut 0.0)
 }
 
 // Process commands in insert mode
@@ -200,15 +198,14 @@ fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus
 
         // If there's a formula, paste that
         if !formula.is_empty() {
-            let command = format!("{}={}", cell_ref, formula);
+            let command: String = format!("{}={}", cell_ref, formula);
             return process_command(sheet, &command, &mut 0.0);
-            // return evaluator::handle_command(sheet, &command, &mut 0.0);
         } else {
             // Otherwise paste the literal value
             match _value {
                 crate::cell::CellValue::Integer(value) => {
                     let command = format!("{}={}", cell_ref, value);
-                    return evaluator::handle_command(sheet, &command, &mut 0.0);
+                    return process_command(sheet, &command, &mut 0.0);
                 }
                 crate::cell::CellValue::Error => {
                     // Can't paste an error
