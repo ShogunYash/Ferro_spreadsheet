@@ -123,48 +123,6 @@ impl EditorState {
         // print the spreadsheet with cursor
         sheet.print_spreadsheet();
 
-        // // Calculate visible area
-        // let start_row = sheet.viewport_row;
-        // let start_col = sheet.viewport_col;
-        // let end_row = std::cmp::min(start_row + 10, sheet.rows);
-        // let end_col = std::cmp::min(start_col + 10, sheet.cols);
-
-        // // Print column headers only once
-        // print!("     ");
-        // for col in start_col..end_col {
-        //     print!("{:<8} ", sheet.get_column_name(col));
-        // }
-        // println!();
-
-        // // Print rows with data
-        // for row in start_row..end_row {
-        //     print!("{:<4} ", row + 1); // Show 1-based row numbers
-
-        //     for col in start_col..end_col {
-        //         let cell_value = sheet.get_cell(row, col);
-        //         let color_code = self.get_cell_color_code(sheet, row, col);
-
-        //         // Highlight the cell under the cursor
-        //         if row == self.cursor_row && col == self.cursor_col {
-        //             print!("\x1B[7m"); // Invert colors
-        //             match cell_value {
-        //                 CellValue::Integer(value) => print!("{:<8}", value),
-        //                 CellValue::Error => print!("{:<8}", "ERR"),
-        //             }
-        //             print!("\x1B[0m "); // Reset colors
-        //         } else {
-        //             // Apply color to related cells
-        //             print!("{}", color_code);
-        //             match cell_value {
-        //                 CellValue::Integer(value) => print!("{:<8}", value),
-        //                 CellValue::Error => print!("{:<8}", "ERR"),
-        //             }
-        //             print!("\x1B[0m "); // Reset colors
-        //         }
-        //     }
-        //     println!();
-        // }
-
         // Display status bar
         let col_letter = sheet.get_column_name(self.cursor_col);
         let cell_ref = format!("{}{}", col_letter, self.cursor_row + 1);

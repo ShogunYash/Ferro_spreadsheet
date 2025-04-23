@@ -33,6 +33,7 @@ pub enum CommandStatus {
     CmdCircularRef,
     CmdInvalidCell,
     CmdLockedCell,
+    CmdNotLockedCell
 }
 
 // Modified CellMeta to remove children (they're now stored separately)
@@ -70,6 +71,7 @@ pub struct Spreadsheet {
     pub last_edited: Option<(i16, i16)>,
     pub highlight_cell: i32,
     pub highlight_type: HighlightType,
+    pub display: i16,
 }
 
 impl Spreadsheet {
@@ -100,6 +102,7 @@ impl Spreadsheet {
             last_edited: None,
             highlight_cell: -1,
             highlight_type: HighlightType::None,
+            display: 10,
         })
     }
 
@@ -463,6 +466,10 @@ impl Spreadsheet {
 
     pub fn lock_range(&mut self, range: Range) {
         self.locked_ranges.push(range);
+    }
+
+    pub fn unlock_range(&mut self, range: Range) {
+        self.locked_ranges.retain(|r: &Range| r != &range);
     }
 
     pub fn is_cell_locked(&self, row: i16, col: i16) -> bool {
