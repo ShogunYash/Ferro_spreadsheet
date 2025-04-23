@@ -12,9 +12,6 @@ pub fn handle_vim_command(
     input: &str,
     state: &mut EditorState,
 ) -> CommandStatus {
-    if !input.trim().is_empty() {
-        state.add_to_history(input);
-    }
     // Handle mode-specific input
     match state.mode {
         EditorMode::Normal => handle_normal_mode_command(sheet, input, state),
@@ -124,6 +121,7 @@ fn handle_normal_mode_command(
     // If not handled as a vim command, pass it to the standard command handler
     let mut sleep_time = 0.0;
     let status = evaluator::handle_command(sheet, input, &mut sleep_time);
+    // add sleep time 
     status
 }
 
@@ -167,13 +165,8 @@ fn cut_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
     let cell_key = sheet.get_key(row, col);
     // Also remove this cell from any dependency tracking
     graph::remove_all_parents(sheet, row, col);
-
-    if let Some(meta) = sheet.cell_meta.get_mut(&cell_key) {
-        meta.formula = -1;  // No formula
-        meta.parent1 = -1;  // No parents
-        meta.parent2 = -1;
-    }
-    
+    // Remove the formula from the cell metadata
+    sheet.cell_meta.remove(&cell_key);
     CommandStatus::CmdOk
 }
 
@@ -208,7 +201,8 @@ fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus
         // If there's a formula, paste that
         if !formula.is_empty() {
             let command = format!("{}={}", cell_ref, formula);
-            return evaluator::handle_command(sheet, &command, &mut 0.0);
+            return process_command(sheet, &command, &mut 0.0);
+            // return evaluator::handle_command(sheet, &command, &mut 0.0);
         } else {
             // Otherwise paste the literal value
             match _value {
@@ -246,8 +240,6 @@ mod tests {
             save_file: None,
             command_history: Vec::new(),
             history_position: 0,
-            highlighted_cells: Default::default(),
-            highlight_color: 1,
         };
         (sheet, state)
     }
@@ -390,7 +382,7 @@ mod tests {
         // Test save command with explicit filename
         // Note: This is a mock test that checks if the filename is stored
         // without actually writing to the filesystem
-        let result = handle_vim_command(&mut sheet, ":w test.csv", &mut state);
+        let _result = handle_vim_command(&mut sheet, ":w test.csv", &mut state);
         
         // The actual save operation might fail in the test environment,
         // but we can check if the filename was stored in the state
@@ -403,7 +395,7 @@ mod tests {
         let (mut sheet, mut state) = setup();
         
         // Test write and quit command with explicit filename
-        let result = handle_vim_command(&mut sheet, ":wq test.csv", &mut state);
+        let _result = handle_vim_command(&mut sheet, ":wq test.csv", &mut state);
         
         // Check if the filename was stored
         assert!(state.save_file.is_some());
@@ -486,7 +478,7 @@ mod tests {
         let (mut sheet, mut state) = setup();
         
         // Test with empty input
-        let result = handle_vim_command(&mut sheet, "", &mut state);
+        let _result = handle_vim_command(&mut sheet, "", &mut state);
         
         // Empty input should not change history
         assert_eq!(state.command_history.len(), 0);
