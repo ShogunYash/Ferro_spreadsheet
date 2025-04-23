@@ -250,7 +250,6 @@ impl Spreadsheet {
         self.highlight_type = HighlightType::None;
     }
 
-
     pub fn is_highlighted(&self, cell_key: i32) -> (bool, HighlightType) {
         if self.highlight_cell == -1 || self.highlight_type == HighlightType::None {
             return (false, HighlightType::None);

@@ -383,12 +383,12 @@ mod tests {
         // Test save command with explicit filename
         // Note: This is a mock test that checks if the filename is stored
         // without actually writing to the filesystem
-        let _result = handle_vim_command(&mut sheet, ":w test.csv", &mut state);
+        let _result = handle_vim_command(&mut sheet, ":w test.sheet", &mut state);
         
         // The actual save operation might fail in the test environment,
         // but we can check if the filename was stored in the state
         assert!(state.save_file.is_some());
-        assert_eq!(state.save_file.unwrap(), "test.csv");
+        assert_eq!(state.save_file.unwrap(), "test.sheet");
     }
 
     #[test]
@@ -396,11 +396,11 @@ mod tests {
         let (mut sheet, mut state) = setup();
         
         // Test write and quit command with explicit filename
-        let _result = handle_vim_command(&mut sheet, ":wq test.csv", &mut state);
+        let _result = handle_vim_command(&mut sheet, ":wq test.sheet", &mut state);
         
         // Check if the filename was stored
         assert!(state.save_file.is_some());
-        assert_eq!(state.save_file.unwrap(), "test.csv");
+        assert_eq!(state.save_file.unwrap(), "test.sheet");
         
         // The should_quit flag may or may not be set depending on if the save was successful
         // In a real test environment, this might not work unless we mock the file system

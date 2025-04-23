@@ -6,3 +6,4 @@
 - check argument code in vim editor of karthik
 - add sleep logic in vim command
 - set cursor value
+- command history being added multiple times

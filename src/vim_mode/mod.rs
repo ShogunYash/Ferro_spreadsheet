@@ -45,6 +45,11 @@ pub fn run_editor(sheet: &mut Spreadsheet, filename: Option<String>) {
                     break;
                 }
 
+                // Handle special case for Esc key (will need to be entered as a literal escape or as a string "Esc")
+                if input == ":esc" && editor_state.mode == editor::EditorMode::Insert {
+                    editor_state.mode = editor::EditorMode::Normal;
+                }
+
                 // Process the command if it's not empty
                 if !input.trim().is_empty() {
                     // Add the command to history
@@ -53,11 +58,6 @@ pub fn run_editor(sheet: &mut Spreadsheet, filename: Option<String>) {
                     
                     // Process the command
                     let _status= commands::handle_vim_command(sheet, &input, &mut editor_state);
-                }
-
-                // Handle special case for Esc key (will need to be entered as a literal escape or as a string "Esc")
-                if input == ":esc" && editor_state.mode == editor::EditorMode::Insert {
-                    editor_state.mode = editor::EditorMode::Normal;
                 }
 
                 // Check for quit command
