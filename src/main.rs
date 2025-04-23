@@ -19,6 +19,28 @@ use spreadsheet::Spreadsheet;
 use crate::save_load::{save_spreadsheet, load_spreadsheet};
 const DEFAULT_FILENAME: &str = "rust_spreadsheet.sheet";
 
+
+pub fn process_command(sheet: &mut Spreadsheet, command: &str, last_time: &mut f64) -> CommandStatus {
+    // Process the command and measure execution time
+    let mut sleep_time = 0.0; // Initialize sleep_time to 0.0
+    let command_time ;
+    // Pass by reference instead of cloning
+    let start = Instant::now();
+    let status = handle_command(sheet, command, &mut sleep_time);
+    command_time = start.elapsed().as_secs_f64();
+
+    if sleep_time <= command_time {
+        sleep_time = 0.0;
+    } else {
+        sleep_time -= command_time;
+    }
+    *last_time = command_time + sleep_time;
+    if sleep_time > 0.0 {
+        sleep(Duration::from_secs_f64(sleep_time));
+    }
+    status
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let mut vim_mode_enabled = false;
@@ -46,7 +68,7 @@ fn main() {
         process::exit(1);
     });
 
-    let mut sleep_time = 0.0; // Initialize sleep time
+
     let start = Instant::now();
 
     let mut sheet = match Spreadsheet::create(rows, cols) {
@@ -79,12 +101,10 @@ fn main() {
         vim_mode::run_editor(&mut sheet, filename);
 
     } else {
-        let mut command_time = start.elapsed().as_secs_f64();
-        let mut last_time = command_time; // Update last_time with the command time
-
+        let mut last_time = start.elapsed().as_secs_f64(); // Update last_time with the command time
         let mut last_status = "ok"; // Placeholder for last status
         let mut input = String::with_capacity(128);
-
+        let mut status;
         // Main loop for command input
         loop {
             // Print the spreadsheet 
@@ -147,21 +167,22 @@ fn main() {
             }
 
             // Process the command and measure execution time
-            let start = Instant::now();
-            // Pass by reference instead of cloning
-            let status = handle_command(&mut sheet, trimmed, &mut sleep_time);
-            command_time = start.elapsed().as_secs_f64();
+            status = process_command(&mut sheet, trimmed, &mut last_time);
+            // let start = Instant::now();
+            // // Pass by reference instead of cloning
+            // let status = handle_command(&mut sheet, trimmed, &mut sleep_time);
+            // command_time = start.elapsed().as_secs_f64();
 
-            if sleep_time <= command_time {
-                sleep_time = 0.0;
-            } else {
-                sleep_time -= command_time;
-            }
-            last_time = command_time + sleep_time;
-            if sleep_time > 0.0 {
-                sleep(Duration::from_secs_f64(sleep_time));
-            }
-            sleep_time = 0.0;
+            // if sleep_time <= command_time {
+            //     sleep_time = 0.0;
+            // } else {
+            //     sleep_time -= command_time;
+            // }
+            // last_time = command_time + sleep_time;
+            // if sleep_time > 0.0 {
+            //     sleep(Duration::from_secs_f64(sleep_time));
+            // }
+            // sleep_time = 0.0;
 
             // Update last_status based on the current command status
             last_status = match status {
