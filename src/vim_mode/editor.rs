@@ -140,7 +140,7 @@ impl EditorState {
 
         // Display mode
         println!(
-            "Mode: {} | Use h|j|k|l to navigate, i to insert, Esc to exit insert mode",
+            "Mode: {} | Use h|j|k|l to navigate, i to insert, esc to exit insert mode",
             self.mode_display()
         );
 
@@ -153,7 +153,7 @@ impl EditorState {
         }
 
         // Show highlighting commands
-        println!("Highlight: :HLP (parents), :HLC (children), :HLPC (family)");
+        println!("Highlight: HLP (parents), HLC (children), HLPC (family)");
 
         io::stdout().flush().unwrap();
     }

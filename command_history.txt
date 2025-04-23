@@ -21,3 +21,25 @@ i
 sc
 esc
 q
+A1=10
+l
+k
+j
+k
+j
+jk
+l
+k
+jh
+h
+:HLP
+:HLP B1
+:HLC A1
+i
+esc
+q
+j
+k
+q
+clean
+q

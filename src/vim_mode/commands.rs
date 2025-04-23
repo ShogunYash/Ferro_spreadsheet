@@ -197,22 +197,28 @@ fn yank_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus 
 // Paste to the current cell
 fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
     if let Some((_row, _col, value, formula)) = &state.clipboard {
-        // Get the target cell reference
-        let cell_ref = state.cursor_to_cell_ref(sheet);
+        // Check if value is not an error (different approach than comparing with Some(()))
+        if !matches!(value, CellValue::Error) {
+            // Get the target cell reference
+            let cell_ref = state.cursor_to_cell_ref(sheet);
 
-        // If there's a formula, paste that
-        if !formula.is_empty() {
-            let command: String = format!("{}={}", cell_ref, formula);
-            return process_command(sheet, &command, &mut 0.0);
+            // If there's a formula, paste that
+            if !formula.is_empty() {
+                let command: String = format!("{}={}", cell_ref, formula);
+                return process_command(sheet, &command, &mut 0.0);
+            } else {
+                // Otherwise paste the literal value
+                // remove cell meta data and parents
+                remove_all_parents(sheet, state.cursor_row, state.cursor_col);
+                // Remove the formula from the cell metadata
+                sheet.cell_meta.remove(&sheet.get_key(state.cursor_row, state.cursor_col));
+                *sheet.get_mut_cell(state.cursor_row, state.cursor_col) = value.clone();
+            }
+            CommandStatus::CmdOk
         } else {
-            // Otherwise paste the literal value
-            // remove cell meta data and parents
-            remove_all_parents(sheet, state.cursor_row, state.cursor_col);
-            // Remove the formula from the cell metadata
-            sheet.cell_meta.remove(&sheet.get_key(state.cursor_row, state.cursor_col));
-            *sheet.get_mut_cell(state.cursor_row, state.cursor_col) = value.clone();
+            // Value is an error
+            CommandStatus::CmdUnrecognized
         }
-        CommandStatus::CmdOk
     } else {
         // Nothing in clipboard
         CommandStatus::CmdUnrecognized
@@ -273,14 +279,13 @@ mod tests {
     #[test]
     fn test_mode_switching() {
         let (mut sheet, mut state) = setup();
-        
         // Test switching to insert mode with 'i'
         let result = handle_vim_command(&mut sheet, "i", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
         assert_eq!(state.mode, EditorMode::Insert);
         
         // Test switching back to normal mode with Esc
-        let result =handle_vim_command(&mut sheet, "Esc", &mut state);
+        let result =handle_vim_command(&mut sheet, "esc", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
         assert_eq!(state.mode, EditorMode::Normal);
     }
