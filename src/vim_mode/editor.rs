@@ -23,9 +23,6 @@ pub struct EditorState {
     // Command history
     pub command_history: Vec<String>,
     pub history_position: usize,
-    // Highlighted cells
-    pub highlighted_cells: HashSet<i16>,
-    pub highlight_color: u8, // Current highlighting color
 }
 impl EditorState {
     pub fn new() -> Self {
@@ -38,8 +35,6 @@ impl EditorState {
             save_file: None,
             command_history: Vec::new(),
             history_position: 0,
-            highlighted_cells: HashSet::new(),
-            highlight_color: 1, // Default highlight color (red)
         }
     }
 
@@ -120,72 +115,55 @@ impl EditorState {
         }
     }
 
-    // Get ANSI color code for a given cell
-    fn get_cell_color_code(&self, sheet: &Spreadsheet, row: i16, col: i16) -> String {
-        let cell_key = sheet.get_key(row, col);
-        
-        // Check if this cell is highlighted
-        if self.highlighted_cells.contains(&(cell_key as i16)) {
-            match self.highlight_color {
-                1 => "\x1B[31m".to_string(), // Red
-                2 => "\x1B[32m".to_string(), // Green
-                3 => "\x1B[33m".to_string(), // Yellow
-                4 => "\x1B[34m".to_string(), // Blue
-                5 => "\x1B[35m".to_string(), // Magenta
-                6 => "\x1B[36m".to_string(), // Cyan
-                _ => "\x1B[37m".to_string(), // White (default)
-            }
-        } else {
-            "\x1B[37m".to_string() // White (default)
-        }
-    }
-
     // Custom rendering function for vim mode with colored cells
     pub fn render_spreadsheet(&mut self, sheet: &Spreadsheet) {
+
         // Clear screen
         print!("\x1B[2J\x1B[1;1H");
+        // print the spreadsheet with cursor
+        sheet.print_spreadsheet();
 
-        // Calculate visible area
-        let start_row = sheet.viewport_row;
-        let start_col = sheet.viewport_col;
-        let end_row = std::cmp::min(start_row + 10, sheet.rows);
-        let end_col = std::cmp::min(start_col + 10, sheet.cols);
+        // // Calculate visible area
+        // let start_row = sheet.viewport_row;
+        // let start_col = sheet.viewport_col;
+        // let end_row = std::cmp::min(start_row + 10, sheet.rows);
+        // let end_col = std::cmp::min(start_col + 10, sheet.cols);
 
-        // Print column headers only once
-        print!("     ");
-        for col in start_col..end_col {
-            print!("{:<8} ", sheet.get_column_name(col));
-        }
-        println!();
+        // // Print column headers only once
+        // print!("     ");
+        // for col in start_col..end_col {
+        //     print!("{:<8} ", sheet.get_column_name(col));
+        // }
+        // println!();
 
-        // Print rows with data
-        for row in start_row..end_row {
-            print!("{:<4} ", row + 1); // Show 1-based row numbers
+        // // Print rows with data
+        // for row in start_row..end_row {
+        //     print!("{:<4} ", row + 1); // Show 1-based row numbers
 
-            for col in start_col..end_col {
-                let cell_value = sheet.get_cell(row, col);
-                let color_code = self.get_cell_color_code(sheet, row, col);
+        //     for col in start_col..end_col {
+        //         let cell_value = sheet.get_cell(row, col);
+        //         let color_code = self.get_cell_color_code(sheet, row, col);
 
-                // Highlight the cell under the cursor
-                if row == self.cursor_row && col == self.cursor_col {
-                    print!("\x1B[7m"); // Invert colors
-                    match cell_value {
-                        CellValue::Integer(value) => print!("{:<8}", value),
-                        CellValue::Error => print!("{:<8}", "ERR"),
-                    }
-                    print!("\x1B[0m "); // Reset colors
-                } else {
-                    // Apply color to related cells
-                    print!("{}", color_code);
-                    match cell_value {
-                        CellValue::Integer(value) => print!("{:<8}", value),
-                        CellValue::Error => print!("{:<8}", "ERR"),
-                    }
-                    print!("\x1B[0m "); // Reset colors
-                }
-            }
-            println!();
-        }
+        //         // Highlight the cell under the cursor
+        //         if row == self.cursor_row && col == self.cursor_col {
+        //             print!("\x1B[7m"); // Invert colors
+        //             match cell_value {
+        //                 CellValue::Integer(value) => print!("{:<8}", value),
+        //                 CellValue::Error => print!("{:<8}", "ERR"),
+        //             }
+        //             print!("\x1B[0m "); // Reset colors
+        //         } else {
+        //             // Apply color to related cells
+        //             print!("{}", color_code);
+        //             match cell_value {
+        //                 CellValue::Integer(value) => print!("{:<8}", value),
+        //                 CellValue::Error => print!("{:<8}", "ERR"),
+        //             }
+        //             print!("\x1B[0m "); // Reset colors
+        //         }
+        //     }
+        //     println!();
+        // }
 
         // Display status bar
         let col_letter = sheet.get_column_name(self.cursor_col);
@@ -228,6 +206,7 @@ impl EditorState {
         let command = format!("{}={}", cell_ref, value);
         let mut sleep_time = 0.0;
         crate::evaluator::handle_command(sheet, &command, &mut sleep_time)
+        // add sleep time to the command status
     }
 
     // Convert cursor position to cell reference string (e.g., "A1")
@@ -254,9 +233,6 @@ fn test_new_editor_state() {
     assert_eq!(state.should_quit, false);
     assert_eq!(state.clipboard, None);
     assert_eq!(state.save_file, None);
-    assert_eq!(state.history_position, 0);
-    assert_eq!(state.highlight_color, 1);
-    assert!(state.highlighted_cells.is_empty());
     assert!(state.command_history.is_empty());
 }
 
@@ -369,8 +345,6 @@ fn test_adjust_viewport() {
         save_file: None,
         command_history: Vec::new(),
         history_position: 0,
-        highlighted_cells: HashSet::new(),
-        highlight_color: 1,
     };
 
     // Test 1: Cursor is within viewport
@@ -459,45 +433,6 @@ fn test_parse_cell_ref() {
 }
 
 #[test]
-fn test_get_cell_color_code() {
-    let mut state = EditorState::new();
-    let sheet = Spreadsheet::create(10, 10).unwrap();
-    
-    // Default color for non-highlighted cells is white
-    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[37m".to_string());
-    
-    // Add cell to highlighted cells
-    let cell_key = sheet.get_key(0, 0);
-    state.highlighted_cells.insert(cell_key as i16);
-    
-    // Test different highlight colors
-    state.highlight_color = 1; // Red
-    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[31m".to_string());
-    
-    state.highlight_color = 2; // Green
-    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[32m".to_string());
-    
-    state.highlight_color = 3; // Yellow
-    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[33m".to_string());
-    
-    state.highlight_color = 4; // Blue
-    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[34m".to_string());
-    
-    state.highlight_color = 5; // Magenta
-    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[35m".to_string());
-    
-    state.highlight_color = 6; // Cyan
-    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[36m".to_string());
-    
-    // Test invalid color (defaults to white)
-    state.highlight_color = 7;
-    assert_eq!(state.get_cell_color_code(&sheet, 0, 0), "\x1B[37m".to_string());
-    
-    // Test another cell (not highlighted)
-    assert_eq!(state.get_cell_color_code(&sheet, 1, 1), "\x1B[37m".to_string());
-}
-
-#[test]
 fn test_cursor_to_cell_ref() {
     let mut state = EditorState::new();
     let sheet = Spreadsheet::create(10, 30).unwrap();
@@ -577,57 +512,6 @@ fn test_clipboard_functionality() {
     // Clear clipboard
     state.clipboard = None;
     assert!(state.clipboard.is_none());
-}
-
-#[test]
-fn test_highlighting_cells() {
-    let mut state = EditorState::new();
-    let sheet = Spreadsheet::create(10, 10).unwrap();
-    
-    // Initially no cells are highlighted
-    assert!(state.highlighted_cells.is_empty());
-    
-    // Add some cells to highlighted set
-    let key1 = sheet.get_key(0, 0) as i16;
-    let key2 = sheet.get_key(1, 1) as i16;
-    let key3 = sheet.get_key(2, 2) as i16;
-    
-    state.highlighted_cells.insert(key1);
-    state.highlighted_cells.insert(key2);
-    state.highlighted_cells.insert(key3);
-    
-    assert_eq!(state.highlighted_cells.len(), 3);
-    assert!(state.highlighted_cells.contains(&key1));
-    assert!(state.highlighted_cells.contains(&key2));
-    assert!(state.highlighted_cells.contains(&key3));
-    
-    // Remove a cell from highlights
-    state.highlighted_cells.remove(&key2);
-    
-    assert_eq!(state.highlighted_cells.len(), 2);
-    assert!(state.highlighted_cells.contains(&key1));
-    assert!(!state.highlighted_cells.contains(&key2));
-    assert!(state.highlighted_cells.contains(&key3));
-    
-    // Clear all highlights
-    state.highlighted_cells.clear();
-    assert!(state.highlighted_cells.is_empty());
-}
-
-#[test]
-fn test_changing_highlight_color() {
-    let mut state = EditorState::new();
-    
-    // Default highlight color is 1 (red)
-    assert_eq!(state.highlight_color, 1);
-    
-    // Change to green
-    state.highlight_color = 2;
-    assert_eq!(state.highlight_color, 2);
-    
-    // Change to an invalid value (should be allowed as it just falls back to white in rendering)
-    state.highlight_color = 10;
-    assert_eq!(state.highlight_color, 10);
 }
 
 #[test]
