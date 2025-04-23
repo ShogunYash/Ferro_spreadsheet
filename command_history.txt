@@ -1,101 +1,19 @@
 #V2
-:esc
-e
+i
+4
+h
+j
+k
+l
+k
+j
+h
+esc
 Esc
 j
 h
-j
 k
-kk
-k
-A1=3
-visualizeB1
-visualize B1
-j
-k
-j
-k
-kj
-j
-:w new.csv
-;q
-:q
-:w
-A1=00
-w
-:w
-j
-k
-:w
-:q
-A1=2
-A2-3
-A2=3
-A2=A1+A2
-A3=A2+A3
-A2=A1/0
-A2=3
-;q
-:q
-A1=2
-A2=3
-B1=A1+A2
-hp B1
-HcB1
-:hp B1
-l
-k
-j
-h
-j
-k
-j
-k
-kk
-k
-l
-k
-j
-h
-k
-j
-B2=SUM(A1:A5)
-A5=5
-l
-j
-h
-k
-l
-j
-:q
-A1=2
-A2=5
-B1=A1+A2
-hp B1
-:hp B1
-hc A1
-:q
-A1=2
-A2=5
-B1=A1+A2
-:hp B1
-l
-:hp B1
-:hc A1
-:q
-A1=2
-A2=5
-B1=A1+A2
-:hp B1
-l
-:hp
-:hp B1
-A1=3
-j
-B2=SUM(A1:A2)
-:w
-:q
-A1=2
-q
-l
+i
+3
+Esc
 q
