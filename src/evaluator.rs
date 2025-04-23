@@ -498,16 +498,16 @@ pub fn handle_command(
         }
     }
 
-    if trimmed.starts_with("display ") {
-        let num_str = trimmed.get(8..).unwrap_or("").trim();
-        match num_str.parse::<i16>() {
-            Ok(num) if num > 0 && num <= MAX_DISPLAY => {
-                sheet.display = num;
-                return CommandStatus::CmdOk;
-            }
-            _ => return CommandStatus::CmdUnrecognized,
-        }
-    }
+    // if trimmed.starts_with("display ") {
+    //     let num_str = trimmed.get(8..).unwrap_or("").trim();
+    //     match num_str.parse::<i16>() {
+    //         Ok(num) if num > 0 && num <= MAX_DISPLAY => {
+    //             sheet.display = num;
+    //             return CommandStatus::CmdOk;
+    //         }
+    //         _ => return CommandStatus::CmdUnrecognized,
+    //     }
+    // }
 
     // Check for scroll_to command with byte-based comparison
     if trimmed.len() > 10
