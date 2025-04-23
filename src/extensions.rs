@@ -99,6 +99,10 @@ pub fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
 mod tests {
     use super::*;
     use crate::spreadsheet::Spreadsheet;
+    use std::fs::{self, File};
+    use std::io::Write;
+    use std::path::Path;
+    use crate::save_load::{save_spreadsheet, load_spreadsheet};
 
     #[test]
     fn test_get_formula_string_basic_operations() {
@@ -209,5 +213,108 @@ mod tests {
         meta.parent1 = -1;
         meta.parent2 = -1;
         assert_eq!(get_formula_string(&sheet, 3, 0), "No formula");
+    }
+
+    #[test]
+    fn test_save_spreadsheet_invalid_path() {
+        let sheet = Spreadsheet::create(5, 5).unwrap();
+        // Try to save to an invalid path (should fail)
+        let status = save_spreadsheet(&sheet, "/invalid_path/should_fail.sheet");
+        assert_eq!(status, crate::spreadsheet::CommandStatus::CmdUnrecognized);
+    }
+
+    #[test]
+    fn test_load_spreadsheet_nonexistent_file() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        // Try to load a file that doesn't exist
+        let status = load_spreadsheet(&mut sheet, "this_file_should_not_exist_123456.sheet");
+        assert_eq!(status, crate::spreadsheet::CommandStatus::CmdUnrecognized);
+    }
+
+    #[test]
+    fn test_load_spreadsheet_invalid_lines() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let filename = "test_invalid_lines.sheet";
+        let mut file = File::create(filename).unwrap();
+        // Write invalid lines
+        writeln!(file, "INVALID_LINE").unwrap();
+        writeln!(file, "CELL,A1,ERR").unwrap();
+        writeln!(file, "CELL,A1,notanumber").unwrap();
+        writeln!(file, "CELL,ZZZ,42").unwrap(); // Invalid cell ref
+        writeln!(file, "CELL,A1,42,FORMULA,notanumber,A1,B1").unwrap(); // Invalid formula code
+        writeln!(file, "DIMS,notanumber,notanumber").unwrap(); // Invalid DIMS
+        file.flush().unwrap();
+
+        // Should not panic, should continue on errors
+        let status = load_spreadsheet(&mut sheet, filename);
+        assert_eq!(status, crate::spreadsheet::CommandStatus::CmdOk);
+
+        // Clean up
+        let _ = fs::remove_file(filename);
+    }
+
+    #[test]
+    fn test_load_spreadsheet_invalid_dims_warning() {
+        let mut sheet = Spreadsheet::create(2, 2).unwrap();
+        let filename = "test_invalid_dims.sheet";
+        let mut file = File::create(filename).unwrap();
+        // Write a DIMS line with larger dims than sheet
+        writeln!(file, "DIMS,10,10").unwrap();
+        file.flush().unwrap();
+
+        // Should print a warning but still succeed
+        let status = load_spreadsheet(&mut sheet, filename);
+        assert_eq!(status, crate::spreadsheet::CommandStatus::CmdOk);
+
+        // Clean up
+        let _ = fs::remove_file(filename);
+    }
+
+    #[test]
+    fn test_load_spreadsheet_formula_parent_refs_empty() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let filename = "test_formula_parent_refs_empty.sheet";
+        let mut file = File::create(filename).unwrap();
+        // parent1_ref and parent2_ref are empty
+        writeln!(file, "CELL,A1,42,FORMULA,10,,").unwrap();
+        file.flush().unwrap();
+
+        let status = load_spreadsheet(&mut sheet, filename);
+        assert_eq!(status, crate::spreadsheet::CommandStatus::CmdOk);
+
+        // Clean up
+        let _ = fs::remove_file(filename);
+    }
+
+    #[test]
+    fn test_load_spreadsheet_formula_parent_refs_parse_fail() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let filename = "test_formula_parent_refs_parse_fail.sheet";
+        let mut file = File::create(filename).unwrap();
+        // parent1_ref and parent2_ref are invalid (parse_cell_reference fails)
+        writeln!(file, "CELL,A1,42,FORMULA,10,INVALID1,INVALID2").unwrap();
+        file.flush().unwrap();
+
+        let status = load_spreadsheet(&mut sheet, filename);
+        assert_eq!(status, crate::spreadsheet::CommandStatus::CmdOk);
+
+        // Clean up
+        let _ = fs::remove_file(filename);
+    }
+
+    #[test]
+    fn test_load_spreadsheet_formula_parent_refs_out_of_bounds() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let filename = "test_formula_parent_refs_out_of_bounds.sheet";
+        let mut file = File::create(filename).unwrap();
+        // parent1_ref and parent2_ref are valid format but out of bounds
+        writeln!(file, "CELL,A1,42,FORMULA,10,Z10,Y20").unwrap(); // Z10 and Y20 are out of 5x5
+        file.flush().unwrap();
+
+        let status = load_spreadsheet(&mut sheet, filename);
+        assert_eq!(status, crate::spreadsheet::CommandStatus::CmdOk);
+
+        // Clean up
+        let _ = fs::remove_file(filename);
     }
 }

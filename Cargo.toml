@@ -29,6 +29,7 @@ incremental = false # Disables incremental compilation in release
 [dependencies]
 petgraph = "0.6.4"  # Add this for graph visualization
 rustyline = "10.0.0"
+tempfile = "3.3.0"  
 
 [[bin]]
 name = "spreadsheet"
