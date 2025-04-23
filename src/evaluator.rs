@@ -487,7 +487,7 @@ pub fn handle_command(
 
     // Check for cell dependency visualization command
     if trimmed.starts_with("visual ") {
-        let cell_ref = &trimmed[10..]; // Skip "visualize " prefix
+        let cell_ref = &trimmed[7..]; // Skip "visualize " prefix
         match parse_cell_reference(sheet, cell_ref) {
             Ok((row, col)) => {
                 return sheet.visualize_cell_relationships(row, col);
