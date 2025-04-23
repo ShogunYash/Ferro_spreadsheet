@@ -2,6 +2,7 @@ use crate::cell::{CellValue, parse_cell_reference};
 use crate::spreadsheet::{CommandStatus, Spreadsheet};
 
 #[derive(Debug, PartialEq, Clone)]
+// Range struct to represent a range of cells in the spreadsheet
 pub struct Range {
     pub start_row: i16,
     pub start_col: i16,
@@ -132,6 +133,7 @@ pub fn eval_max(
     CommandStatus::CmdOk
 }
 
+// Fix eval_avg implementation
 pub fn eval_avg(
     sheet: &mut Spreadsheet,
     row: i16,
