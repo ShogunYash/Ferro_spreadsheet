@@ -142,7 +142,7 @@ impl EditorState {
                 "".to_string()
             };
 
-        println!("\nCursor at: {} - {}", cell_ref, formula_str);
+        println!("\nCursor at: {} : {}", cell_ref, formula_str);
 
         // Display mode
         println!(
