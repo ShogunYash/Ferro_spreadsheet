@@ -46,7 +46,7 @@ pub fn run_editor(sheet: &mut Spreadsheet, filename: Option<String>) {
                 }
 
                 // Handle special case for Esc key (will need to be entered as a literal escape or as a string "Esc")
-                if input == ":esc" && editor_state.mode == editor::EditorMode::Insert {
+                if (input == ":esc" || input == "\x1b") && editor_state.mode == editor::EditorMode::Insert {
                     editor_state.mode = editor::EditorMode::Normal;
                 }
 

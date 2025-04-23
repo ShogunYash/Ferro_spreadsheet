@@ -2,7 +2,7 @@
 use super::editor::{EditorMode, EditorState};
 use crate::spreadsheet::{CommandStatus, Spreadsheet};
 use crate::cell::CellValue;
-use crate::graph;
+use crate::graph::{self, remove_all_parents};
 use crate::save_load::save_spreadsheet;
 use crate::process_command::process_command;
 
@@ -134,7 +134,7 @@ fn handle_insert_mode_command(
     state: &mut EditorState,
 ) -> CommandStatus {
     // Check for Escape key to exit insert mode
-    if input == "Esc" || input == "\x1b" {
+    if input == "esc" || input == "\x1b" {
         state.mode = EditorMode::Normal;
         return CommandStatus::CmdOk;
     }
@@ -196,7 +196,7 @@ fn yank_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus 
 
 // Paste to the current cell
 fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
-    if let Some((_row, _col, _value, formula)) = &state.clipboard {
+    if let Some((_row, _col, value, formula)) = &state.clipboard {
         // Get the target cell reference
         let cell_ref = state.cursor_to_cell_ref(sheet);
 
@@ -206,17 +206,13 @@ fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus
             return process_command(sheet, &command, &mut 0.0);
         } else {
             // Otherwise paste the literal value
-            match _value {
-                crate::cell::CellValue::Integer(value) => {
-                    let command = format!("{}={}", cell_ref, value);
-                    return process_command(sheet, &command, &mut 0.0);
-                }
-                crate::cell::CellValue::Error => {
-                    // Can't paste an error
-                    return CommandStatus::CmdUnrecognized;
-                }
-            }
+            // remove cell meta data and parents
+            remove_all_parents(sheet, state.cursor_row, state.cursor_col);
+            // Remove the formula from the cell metadata
+            sheet.cell_meta.remove(&sheet.get_key(state.cursor_row, state.cursor_col));
+            *sheet.get_mut_cell(state.cursor_row, state.cursor_col) = value.clone();
         }
+        CommandStatus::CmdOk
     } else {
         // Nothing in clipboard
         CommandStatus::CmdUnrecognized

@@ -20,10 +20,10 @@ pub fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
                     (left_name, right_name)
             };
             match msb {
-                1 => format!("{} + {}", left, right),
-                2 => format!("{} - {}", left, right),
-                3 => format!("{} / {}", left, right),
-                _ => format!("{} * {}", left, right),
+                1 => format!("{}+{}", left, right),
+                2 => format!("{}-{}", left, right),
+                3 => format!("{}/{}", left, right),
+                _ => format!("{}*{}", left, right),
             }
         }
         2 => {
@@ -33,10 +33,10 @@ pub fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
                 (left_name, parent2.to_string())
             };
             match msb {
-                1 => format!("{} + {}", left, right),
-                2 => format!("{} - {}", left, right),
-                4 => format!("{} * {}", left, right),
-                3 => format!("{} / {}", left, right),
+                1 => format!("{}+{}", left, right),
+                2 => format!("{}-{}", left, right),
+                4 => format!("{}*{}", left, right),
+                3 => format!("{}/{}", left, right),
                 8 => format!("{}", left),
                 _ => format!("SLEEP({})", left),
             }
@@ -48,10 +48,10 @@ pub fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
                 (parent1.to_string(), right_name)
             };
             match msb {
-                1 => format!("{} + {}", left, right),
-                2 => format!("{} - {}", left, right),
-                3 => format!("{} / {}", left, right),
-                _ => format!("{} * {}", left, right),
+                1 => format!("{}+{}", left, right),
+                2 => format!("{}-{}", left, right),
+                3 => format!("{}/{}", left, right),
+                _ => format!("{}*{}", left, right),
             }
         }
         5 => {
@@ -111,21 +111,21 @@ mod tests {
         meta.formula = 20; // 2 (subtraction) * 10 + 0 (both are cell refs)
         meta.parent1 = a1_pos;
         meta.parent2 = b2_pos;
-        assert_eq!(get_formula_string(&sheet, 0, 1), "A1 - B2");
+        assert_eq!(get_formula_string(&sheet, 0, 1), "A1-B2");
 
         // Test multiplication (A1 * 5)
         let meta = sheet.get_cell_meta(0, 2);
         meta.formula = 43; // 4 (multiplication) * 10 + 3 (first is cell, second is literal)
         meta.parent1 = 5;
         meta.parent2 = a1_pos;
-        assert_eq!(get_formula_string(&sheet, 0, 2), "5 * A1");
+        assert_eq!(get_formula_string(&sheet, 0, 2), "5*A1");
 
         // Test division (10 / B2)
         let meta = sheet.get_cell_meta(0, 3);
         meta.formula = 32; // 3 (division) * 10 + 2 (first is literal, second is cell)
         meta.parent1 = b2_pos;
         meta.parent2 = 10;
-        assert_eq!(get_formula_string(&sheet, 0, 3), "B2 / 10");
+        assert_eq!(get_formula_string(&sheet, 0, 3), "B2/10");
     }
 
     #[test]

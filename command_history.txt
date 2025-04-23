@@ -17,3 +17,7 @@ i
 3
 Esc
 q
+i
+sc
+esc
+q
