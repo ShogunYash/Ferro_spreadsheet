@@ -52,8 +52,7 @@ pub fn run_editor(sheet: &mut Spreadsheet, filename: Option<String>) {
                     editor_state.add_to_history(&input);
                     
                     // Process the command
-                    let status= commands::handle_vim_command(sheet, &input, &mut editor_state);
-
+                    let _status= commands::handle_vim_command(sheet, &input, &mut editor_state);
                 }
 
                 // Handle special case for Esc key (will need to be entered as a literal escape or as a string "Esc")
@@ -68,8 +67,7 @@ pub fn run_editor(sheet: &mut Spreadsheet, filename: Option<String>) {
             },
             Err(_) => {
                 // Handle errors or ctrl+c/ctrl+d
-                println!("\nExiting editor...");
-                break;
+                println!("Error reading input. Please try again.");
             }
         }
     }
