@@ -4,7 +4,7 @@ mod editor;
 use crate::spreadsheet::Spreadsheet;
 use rustyline::{Config, Editor};
 
-use crate::extensions_2::load_spreadsheet;
+use crate::save_load::load_spreadsheet;
 
 pub fn run_editor(sheet: &mut Spreadsheet, filename: Option<String>) {
     // Initialize vim mode editor state
