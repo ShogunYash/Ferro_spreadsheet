@@ -3,7 +3,7 @@ use crate::formula::parse_range;
 use crate::formula::{eval_avg, eval_max, eval_min, eval_variance, sum_value};
 use crate::graph::{add_children, remove_all_parents};
 use crate::reevaluate_topo::{sleep_fn, toposort_reval_detect_cycle};
-use crate::spreadsheet::{CommandStatus, Spreadsheet, HighlightType, MAX_DISPLAY};
+use crate::spreadsheet::{CommandStatus, Spreadsheet, HighlightType};
 use crate::formula::Range;
 use crate::extensions::get_formula_string;
 
