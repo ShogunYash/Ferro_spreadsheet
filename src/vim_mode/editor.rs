@@ -23,9 +23,6 @@ pub struct EditorState {
     // Command history
     pub command_history: Vec<String>,
     pub history_position: usize,
-    pub command_string : String,
-    pub command_answer : String,
-    pub command_true : bool,
 }
 impl EditorState {
     pub fn new() -> Self {
@@ -38,9 +35,6 @@ impl EditorState {
             save_file: None,
             command_history: Vec::new(),
             history_position: 0,
-            command_string : String::new(),
-            command_answer : String::new(),
-            command_true : false,
         }
     }
 
@@ -141,18 +135,12 @@ impl EditorState {
             } else {
                 "".to_string()
             };
-        
-        // Here print command string ans if true 
-        if self.command_true {
-            println!("Command: {}", self.command_string);
-            println!("\nResult: {}", self.command_answer);
-            self.command_true = false;
-        }
-        println!("\nCursor at: {} : {}", cell_ref, formula_str);
+
+        println!("\nCursor at: {} - {}", cell_ref, formula_str);
 
         // Display mode
         println!(
-            "Mode: {} | Use h|j|k|l to navigate, i to insert, Esc to exit insert mode",
+            "Mode: {} | Use h|j|k|l to navigate, i to insert, esc to exit insert mode",
             self.mode_display()
         );
 
@@ -165,7 +153,7 @@ impl EditorState {
         }
 
         // Show highlighting commands
-        println!("Highlight: :HLP (parents), :HLC (children), :HLPC (family), :HLOFF (off)");
+        println!("Highlight: HLP (parents), HLC (children), HLPC (family)");
 
         io::stdout().flush().unwrap();
     }
@@ -313,9 +301,6 @@ fn test_adjust_viewport() {
         save_file: None,
         command_history: Vec::new(),
         history_position: 0,
-        command_string: String::new(),
-        command_answer: String::new(),
-        command_true: false,
     };
 
     // Test 1: Cursor is within viewport

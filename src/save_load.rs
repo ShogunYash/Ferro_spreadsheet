@@ -825,7 +825,7 @@ mod tests {
 
         // Patch load_spreadsheet to use our ErrorLineReader for this test only
         // We'll just call the relevant code directly here for demonstration
-        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let mut _sheet = Spreadsheet::create(5, 5).unwrap();
         let mut called = false;
         let mut reader = ErrorLineReader {
             lines: vec![
