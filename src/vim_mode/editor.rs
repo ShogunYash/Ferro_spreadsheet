@@ -1,8 +1,8 @@
 // vim_mode/editor.rs
 use crate::cell::CellValue;
+use crate::process_command;
 use crate::spreadsheet::{CommandStatus, Spreadsheet}; // <-- fix: import Spreadsheet as struct, not as trait
 use std::io::{self, Write};
-use std::collections::HashSet;
 use crate::extensions::get_formula_string; // <-- fix: import get_formula_string from extensions
 
 // Define editor modes
@@ -204,9 +204,7 @@ impl EditorState {
     pub fn set_cursor_cell_value(&self, sheet: &mut Spreadsheet, value: &str) -> CommandStatus {
         let cell_ref = self.cursor_to_cell_ref(sheet);
         let command = format!("{}={}", cell_ref, value);
-        let mut sleep_time = 0.0;
-        crate::evaluator::handle_command(sheet, &command, &mut sleep_time)
-        // add sleep time to the command status
+        process_command::process_command(sheet, &command, &mut 0.0)
     }
 
     // Convert cursor position to cell reference string (e.g., "A1")
