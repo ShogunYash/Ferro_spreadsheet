@@ -4,7 +4,7 @@ use crate::evaluator;
 use crate::spreadsheet::{CommandStatus, Spreadsheet};
 use crate::cell::CellValue;
 use crate::graph;
-use crate::extensions_2::save_spreadsheet;
+use crate::save_load::save_spreadsheet;
 
 // Handle vim-specific commands
 pub fn handle_vim_command(
@@ -165,14 +165,15 @@ fn cut_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
     
     // Reset formula metadata
     let cell_key = sheet.get_key(row, col);
+    // Also remove this cell from any dependency tracking
+    graph::remove_all_parents(sheet, row, col);
+
     if let Some(meta) = sheet.cell_meta.get_mut(&cell_key) {
         meta.formula = -1;  // No formula
         meta.parent1 = -1;  // No parents
         meta.parent2 = -1;
     }
     
-    // Also remove this cell from any dependency tracking
-    graph::remove_all_parents(sheet, row, col);
     CommandStatus::CmdOk
 }
 
@@ -183,42 +184,14 @@ fn yank_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus 
 
     // Get the formula for the cell (if any)
     let cell_key = sheet.get_key(state.cursor_row, state.cursor_col);
-    let formula = if let Some(meta) = sheet.cell_meta.get(&cell_key) {
-        if meta.formula != -1 {
-            // Get the parent cells as references
-            let parent1_ref = if meta.parent1 != -1 {
-                let (p1_row, p1_col) = sheet.get_row_col(meta.parent1);
-                format!("{}{}", sheet.get_column_name(p1_col), p1_row + 1)
-            } else {
-                String::from("")
-            };
-            
-            let parent2_ref = if meta.parent2 != -1 {
-                let (p2_row, p2_col) = sheet.get_row_col(meta.parent2);
-                format!("{}{}", sheet.get_column_name(p2_col), p2_row + 1)
-            } else {
-                String::from("")
-            };
-            // Convert formula code to string
-            if meta.formula == 10 {
-                format!("{}+{}", parent1_ref, parent2_ref)
-            } else if meta.formula == 20 {
-                format!("{}-{}", parent1_ref, parent2_ref)
-            } else if meta.formula == 40 {
-                format!("{}*{}", parent1_ref, parent2_ref)
-            } else if meta.formula == 30 {
-                format!("{}/{}", parent1_ref, parent2_ref)
-            } else {
-                format!("{}", meta.formula)
-            }
-            
-             
+    let formula = 
+        if let Some( _meta) = sheet.cell_meta.get(&cell_key) {
+                // Get the formula string from the cell metadata
+                let formula_string = crate::extensions::get_formula_string(sheet, state.cursor_row, state.cursor_col);
+                format!("{}", formula_string)
         } else {
             String::new()
-        }
-    } else {
-        String::new()
-    };
+        };
 
     // Store in clipboard
     state.clipboard = Some((state.cursor_row, state.cursor_col, cell_value, formula));
@@ -273,7 +246,6 @@ mod tests {
             save_file: None,
             command_history: Vec::new(),
             history_position: 0,
-            current_input: String::new(),
             highlighted_cells: Default::default(),
             highlight_color: 1,
         };
