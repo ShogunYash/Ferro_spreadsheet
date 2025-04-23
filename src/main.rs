@@ -8,38 +8,19 @@ mod vim_mode;
 mod visualize_cells;
 mod extensions;
 mod save_load;
+mod process_command;
+use crate::process_command::process_command;
 use std::env;
 use std::io::{self, Write};
 use std::process;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
-use evaluator::handle_command;
+
+use std::time::Instant;
+
 use spreadsheet::CommandStatus;
 use spreadsheet::Spreadsheet;
 use crate::save_load::{save_spreadsheet, load_spreadsheet};
 const DEFAULT_FILENAME: &str = "rust_spreadsheet.sheet";
 
-
-pub fn process_command(sheet: &mut Spreadsheet, command: &str, last_time: &mut f64) -> CommandStatus {
-    // Process the command and measure execution time
-    let mut sleep_time = 0.0; // Initialize sleep_time to 0.0
-    let command_time ;
-    // Pass by reference instead of cloning
-    let start = Instant::now();
-    let status = handle_command(sheet, command, &mut sleep_time);
-    command_time = start.elapsed().as_secs_f64();
-
-    if sleep_time <= command_time {
-        sleep_time = 0.0;
-    } else {
-        sleep_time -= command_time;
-    }
-    *last_time = command_time + sleep_time;
-    if sleep_time > 0.0 {
-        sleep(Duration::from_secs_f64(sleep_time));
-    }
-    status
-}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
