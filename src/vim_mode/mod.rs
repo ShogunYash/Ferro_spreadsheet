@@ -1,7 +1,6 @@
 mod commands;
 mod editor;
-
-use crate::spreadsheet::Spreadsheet;
+use crate::spreadsheet::{CommandStatus, Spreadsheet};
 use rustyline::{Config, Editor};
 
 use crate::save_load::load_spreadsheet;

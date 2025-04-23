@@ -5,7 +5,7 @@ use crate::cell::CellValue;
 use crate::graph::{self, remove_all_parents};
 use crate::save_load::save_spreadsheet;
 use crate::process_command::process_command;
-
+use crate::formula::{parse_range, eval_avg,eval_max,eval_min,eval_variance,sum_value, Range};
 // Handle vim-specific commands
 pub fn handle_vim_command(
     sheet: &mut Spreadsheet,
@@ -53,8 +53,79 @@ fn handle_normal_mode_command(
             _ => {}
         }
     }
-
-
+    // 2D range selection and processing all their avg/sum/min/max/stdev but not updating it
+    // command type "V (A1:ZZZ999) SUM"
+    if input.starts_with("V ") {
+        let command = &input[2..];
+        
+        // Find the range within parentheses
+        let start_paren = command.find('(');
+        let end_paren = command.find(')');
+        
+        if let (Some(start_idx), Some(end_idx)) = (start_paren, end_paren) {
+            if start_idx < end_idx {
+                // Extract the range string and operation
+                let range_str = &command[start_idx + 1..end_idx].trim();
+                let operation = command[end_idx + 1..].trim().to_uppercase();
+                
+                // Parse the range
+                match parse_range(sheet, range_str) {
+                    Ok(range) => {
+                        // Get the top-left and bottom-right cell keys
+                        let start_key = sheet.get_key(range.start_row, range.start_col);
+                        let end_key = sheet.get_key(range.end_row, range.end_col);
+                        
+                        // Create a temporary copy of the sheet structure
+                        // to compute the result without modifying the original
+                        let mut temp_sheet = Spreadsheet::create(sheet.rows, sheet.cols).unwrap();
+                        
+                        // Copy the relevant cells to the temp sheet
+                        for r in range.start_row..=range.end_row {
+                            for c in range.start_col..=range.end_col {
+                                let value = sheet.get_cell(r, c).clone();
+                                *temp_sheet.get_mut_cell(r, c) = value;
+                            }
+                        }
+                        
+                        // Create a temporary cell to store the result
+                        let temp_row = 0;
+                        let temp_col = 0;
+                        
+                        // Apply the operation
+                        let status = match operation.as_str() {
+                            "SUM" => sum_value(&mut temp_sheet, temp_row, temp_col, start_key, end_key),
+                            "AVG" => eval_avg(&mut temp_sheet, temp_row, temp_col, start_key, end_key),
+                            "MIN" => eval_min(&mut temp_sheet, temp_row, temp_col, start_key, end_key),
+                            "MAX" => eval_max(&mut temp_sheet, temp_row, temp_col, start_key, end_key),
+                            "STDEV" => eval_variance(&mut temp_sheet, temp_row, temp_col, start_key, end_key),
+                            _ => CommandStatus::CmdUnrecognized
+                        };
+                        
+                        // If successful, display the result
+                        if status == CommandStatus::CmdOk {
+                            let result = temp_sheet.get_cell(temp_row, temp_col);
+                            
+                            // Calculate count of cells
+                            let cell_count = ((range.end_row - range.start_row + 1) as i32) * 
+                                            ((range.end_col - range.start_col + 1) as i32);
+                            // store command and command ans in the new defined commands in struct
+                            state.command_string = format!("{}({}) Cell count: {}", operation, range_str, cell_count);
+                            state.command_answer = format!("{} = {}", operation, match result {
+                                CellValue::Integer(val) => val.to_string(),
+                                CellValue::Error => "ERROR".to_string(),
+                            });
+                            state.command_true = true;
+                            return CommandStatus::CmdOk;
+                        }
+                    },
+                    Err(_) => {
+                        return CommandStatus::CmdUnrecognized;
+                    }
+                }
+            }
+        }
+        return CommandStatus::CmdUnrecognized;
+    }
     // File commands
     if input.starts_with(':') {
         let cmd = &input[1..];
@@ -237,6 +308,9 @@ mod tests {
             save_file: None,
             command_history: Vec::new(),
             history_position: 0,
+            command_string: String::new(),
+            command_answer: String::new(),
+            command_true: false,
         };
         (sheet, state)
     }

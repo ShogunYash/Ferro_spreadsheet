@@ -101,7 +101,6 @@ mod tests {
     use crate::spreadsheet::Spreadsheet;
     use std::fs::{self, File};
     use std::io::Write;
-    use std::path::Path;
     use crate::save_load::{save_spreadsheet, load_spreadsheet};
 
     #[test]

@@ -149,21 +149,6 @@ fn main() {
 
             // Process the command and measure execution time
             status = process_command(&mut sheet, trimmed, &mut last_time);
-            // let start = Instant::now();
-            // // Pass by reference instead of cloning
-            // let status = handle_command(&mut sheet, trimmed, &mut sleep_time);
-            // command_time = start.elapsed().as_secs_f64();
-
-            // if sleep_time <= command_time {
-            //     sleep_time = 0.0;
-            // } else {
-            //     sleep_time -= command_time;
-            // }
-            // last_time = command_time + sleep_time;
-            // if sleep_time > 0.0 {
-            //     sleep(Duration::from_secs_f64(sleep_time));
-            // }
-            // sleep_time = 0.0;
 
             // Update last_status based on the current command status
             last_status = match status {
