@@ -262,7 +262,7 @@ cargo run --release -- 999 18278
 - `C1=SUM(A1:B5)` - Set C1 to the sum of the range A1:B5
 - `w`, `a`, `s`, `d` - Scroll viewport
 - `scroll_to A10` - Move viewport to cell A10
-- `visualize A1` - Show dependencies for cell A1
+- `visual A1` - Show dependencies for cell A1
 - `enable_output`, `disable_output` - Toggle spreadsheet display
 - `q` - Quit the application
 
