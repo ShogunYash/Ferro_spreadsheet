@@ -46,20 +46,20 @@ pub struct RangeChild {
 /// # Variants
 ///
 /// * `CmdOk` - Success.
-/// * `CmdUnrecognized` - Unknown command or error.
-/// * `CmdCircularRef` - Circular reference detected.
-/// * `CmdInvalidCell` - Invalid cell reference.
-/// * `CmdLockedCell` - Cell is locked.
-/// * `CmdNotLockedCell` - Cell is not locked.
+/// * `Unrecognized` - Unknown command or error.
+/// * `CircularRef` - Circular reference detected.
+/// * `InvalidCell` - Invalid cell reference.
+/// * `LockedCell` - Cell is locked.
+/// * `NotLockedCell` - Cell is not locked.
 
 #[derive(Debug, PartialEq)]
 pub enum CommandStatus {
     CmdOk,
-    CmdUnrecognized,
-    CmdCircularRef,
-    CmdInvalidCell,
-    CmdLockedCell,
-    CmdNotLockedCell,
+    Unrecognized,
+    CircularRef,
+    InvalidCell,
+    LockedCell,
+    NotLockedCell,
 }
 
 /// Metadata for a cell’s formula and dependencies.
@@ -479,8 +479,8 @@ impl Spreadsheet {
     /// # Returns
     ///
     /// * `CommandStatus::CmdOk` - On success.
-    /// * `CommandStatus::CmdInvalidCell` - If out of bounds.
-    /// * `CommandStatus::CmdUnrecognized` - If parsing fails.
+    /// * `CommandStatus::InvalidCell` - If out of bounds.
+    /// * `CommandStatus::Unrecognized` - If parsing fails.
     pub fn scroll_to_cell(&mut self, cell: &str) -> CommandStatus {
         match parse_cell_reference(self, cell) {
             Ok((row, col)) => {
@@ -488,7 +488,7 @@ impl Spreadsheet {
                 self.viewport_col = col;
                 CommandStatus::CmdOk
             }
-            Err(_) => CommandStatus::CmdUnrecognized,
+            Err(_) => CommandStatus::Unrecognized,
         }
     }
 
@@ -683,8 +683,8 @@ mod tests {
     #[test]
     fn test_scroll_to_cell_invalid() {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        assert_eq!(sheet.scroll_to_cell("F6"), CommandStatus::CmdUnrecognized);
-        assert_eq!(sheet.scroll_to_cell("1A"), CommandStatus::CmdUnrecognized);
+        assert_eq!(sheet.scroll_to_cell("F6"), CommandStatus::Unrecognized);
+        assert_eq!(sheet.scroll_to_cell("1A"), CommandStatus::Unrecognized);
     }
 
     #[test]
@@ -909,7 +909,7 @@ mod tests {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
         assert_eq!(
             sheet.scroll_to_cell("A1000"),
-            CommandStatus::CmdUnrecognized
+            CommandStatus::Unrecognized
         );
     }
 }

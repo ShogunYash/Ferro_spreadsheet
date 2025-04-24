@@ -17,13 +17,13 @@ use crate::spreadsheet::{CommandStatus, HighlightType, Spreadsheet};
 /// # Returns
 ///
 /// * `Ok((row, col))` - The zero-based coordinates.
-/// * `Err(CommandStatus::CmdUnrecognized)` - If resolution fails
+/// * `Err(CommandStatus::Unrecognized)` - If resolution fails
 fn resolve_cell_reference(sheet: &Spreadsheet, s: &str) -> Result<(i16, i16), CommandStatus> {
     if let Some(range) = sheet.named_ranges.get(s) {
         if range.start_row == range.end_row && range.start_col == range.end_col {
             Ok((range.start_row, range.start_col))
         } else {
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         }
     } else {
         parse_cell_reference(sheet, s)
@@ -43,8 +43,8 @@ fn resolve_cell_reference(sheet: &Spreadsheet, s: &str) -> Result<(i16, i16), Co
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - On success.
-/// * `CommandStatus::CmdCircularRef` - If self-referencing.
-/// * `CommandStatus::CmdUnrecognized` - If expression is invalid.
+/// * `CommandStatus::CircularRef` - If self-referencing.
+/// * `CommandStatus::Unrecognized` - If expression is invalid.
 pub fn handle_sleep(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -61,7 +61,7 @@ pub fn handle_sleep(
 
         // Check for self-reference early (optimization)
         if row == target_row && col == target_col {
-            return CommandStatus::CmdCircularRef;
+            return CommandStatus::CircularRef;
         }
 
         // Remove parents and update cell in one block
@@ -94,7 +94,7 @@ pub fn handle_sleep(
         sheet.cell_meta.remove(&cell_key);
         sleep_fn(sheet, row, col, val, sleep_time);
     } else {
-        return CommandStatus::CmdUnrecognized;
+        return CommandStatus::Unrecognized;
     }
 
     CommandStatus::CmdOk
@@ -114,7 +114,7 @@ pub fn handle_sleep(
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - On success.
-/// * `CommandStatus::CmdUnrecognized` - If expression is invalid.
+/// * `CommandStatus::Unrecognized` - If expression is invalid.
 pub fn evaluate_arithmetic(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -192,7 +192,7 @@ pub fn evaluate_arithmetic(
     }
 
     if op_idx == 0 {
-        return CommandStatus::CmdUnrecognized;
+        return CommandStatus::Unrecognized;
     }
 
     // Split into left and right parts
@@ -200,7 +200,7 @@ pub fn evaluate_arithmetic(
     let right = &expr[op_idx + 1..];
 
     if left.is_empty() || right.is_empty() {
-        return CommandStatus::CmdUnrecognized;
+        return CommandStatus::Unrecognized;
     }
 
     // Variables to track cell references and values
@@ -344,7 +344,7 @@ pub fn evaluate_arithmetic(
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - On success.
-/// * `CommandStatus::CmdUnrecognized` - If formula is invalid
+/// * `CommandStatus::Unrecognized` - If formula is invalid
 pub fn evaluate_formula(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -354,7 +354,7 @@ pub fn evaluate_formula(
 ) -> CommandStatus {
     // Fast fail for empty expression
     if expr.is_empty() {
-        return CommandStatus::CmdUnrecognized;
+        return CommandStatus::Unrecognized;
     }
 
     // Optimize function checks by using bytes for prefix matching
@@ -374,7 +374,7 @@ pub fn evaluate_formula(
         {
             // Handle sleep function separately
             if !expr.ends_with(')') {
-                return CommandStatus::CmdUnrecognized;
+                return CommandStatus::Unrecognized;
             }
             return handle_sleep(sheet, row, col, &expr[6..expr.len() - 1], sleep_time);
         }
@@ -392,7 +392,7 @@ pub fn evaluate_formula(
     if is_formula {
         // Validate formula format
         if !expr.ends_with(')') {
-            return CommandStatus::CmdUnrecognized;
+            return CommandStatus::Unrecognized;
         }
 
         // Extract the range string without allocating extra memory
@@ -447,9 +447,9 @@ pub fn evaluate_formula(
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - On success.
-/// * `CommandStatus::CmdCircularRef` - If a cycle is detected.
-/// * `CommandStatus::CmdLockedCell` - If the cell is locked.
-/// * `CommandStatus::CmdUnrecognized` - If expression is invalid.
+/// * `CommandStatus::CircularRef` - If a cycle is detected.
+/// * `CommandStatus::LockedCell` - If the cell is locked.
+/// * `CommandStatus::Unrecognized` - If expression is invalid.
 pub fn set_cell_value(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -458,7 +458,7 @@ pub fn set_cell_value(
     sleep_time: &mut f64,
 ) -> CommandStatus {
     if sheet.is_cell_locked(row, col) {
-        return CommandStatus::CmdLockedCell;
+        return CommandStatus::LockedCell;
     }
     let cell_key = sheet.get_key(row, col);
 
@@ -488,7 +488,7 @@ pub fn set_cell_value(
                 sheet.cell_meta.remove(&cell_key);
             }
 
-            return CommandStatus::CmdCircularRef;
+            return CommandStatus::CircularRef;
         } else {
             // If no cycle, update the cell history with the old value
             sheet
@@ -515,7 +515,7 @@ pub fn set_cell_value(
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - On success.
-/// * `CommandStatus::CmdLockedCell` - If the cell is locked.
+/// * `CommandStatus::LockedCell` - If the cell is locked.
 fn set_cell_to_value(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -525,7 +525,7 @@ fn set_cell_to_value(
 ) -> CommandStatus {
     // Check if the cell is locked before setting the value
     if sheet.is_cell_locked(row, col) {
-        return CommandStatus::CmdLockedCell;
+        return CommandStatus::LockedCell;
     }
     // Check if the value is a valid integer
     let cell_key = sheet.get_key(row, col);
@@ -550,7 +550,7 @@ fn set_cell_to_value(
 ///
 /// # Returns
 ///
-/// The status of command execution (e.g., `CmdOk`, `CmdUnrecognized`)
+/// The status of command execution (e.g., `CmdOk`, `Unrecognized`)
 pub fn handle_command(
     sheet: &mut Spreadsheet,
     trimmed: &str,
@@ -630,7 +630,7 @@ pub fn handle_command(
                     sheet.lock_range(range);
                     return CommandStatus::CmdOk;
                 }
-                Err(_) => return CommandStatus::CmdUnrecognized,
+                Err(_) => return CommandStatus::Unrecognized,
             }
         } else {
             match resolve_cell_reference(sheet, lock_target) {
@@ -669,7 +669,7 @@ pub fn handle_command(
                     sheet.unlock_range(range);
                     return CommandStatus::CmdOk;
                 }
-                Err(_) => return CommandStatus::CmdUnrecognized,
+                Err(_) => return CommandStatus::Unrecognized,
             }
         } else {
             match resolve_cell_reference(sheet, unlock_target) {
@@ -693,9 +693,9 @@ pub fn handle_command(
         match resolve_cell_reference(sheet, cell_ref) {
             Ok((row, col)) => {
                 if sheet.is_cell_locked(row, col) {
-                    return CommandStatus::CmdLockedCell;
+                    return CommandStatus::LockedCell;
                 } else {
-                    return CommandStatus::CmdNotLockedCell;
+                    return CommandStatus::NotLockedCell;
                 }
             }
             Err(status) => return status,
@@ -721,7 +721,7 @@ pub fn handle_command(
                 return CommandStatus::CmdOk;
             }
         }
-        return CommandStatus::CmdUnrecognized;
+        return CommandStatus::Unrecognized;
     }
 
     if let Some(stripped) = trimmed.strip_prefix("history ") {
@@ -761,7 +761,7 @@ pub fn handle_command(
             sheet.set_highlight(row, col, HighlightType::Parent);
             return CommandStatus::CmdOk;
         } else {
-            return CommandStatus::CmdInvalidCell;
+            return CommandStatus::InvalidCell;
         }
     }
 
@@ -770,7 +770,7 @@ pub fn handle_command(
             sheet.set_highlight(row, col, HighlightType::Child);
             return CommandStatus::CmdOk;
         } else {
-            return CommandStatus::CmdInvalidCell;
+            return CommandStatus::InvalidCell;
         }
     }
 
@@ -779,7 +779,7 @@ pub fn handle_command(
             sheet.set_highlight(row, col, HighlightType::Both);
             return CommandStatus::CmdOk;
         } else {
-            return CommandStatus::CmdInvalidCell;
+            return CommandStatus::InvalidCell;
         }
     }
 
@@ -789,7 +789,7 @@ pub fn handle_command(
     }
 
     // No recognized command
-    CommandStatus::CmdUnrecognized
+    CommandStatus::Unrecognized
 }
 
 #[cfg(test)]
@@ -837,7 +837,7 @@ mod tests {
         let mut sleep_time = 0.0;
         assert_eq!(
             handle_sleep(&mut sheet, 1, 1, "INVALID", &mut sleep_time),
-            CommandStatus::CmdUnrecognized
+            CommandStatus::Unrecognized
         );
     }
 
@@ -847,7 +847,7 @@ mod tests {
         let mut sleep_time = 0.0;
         assert_eq!(
             handle_sleep(&mut sheet, 1, 1, "B2", &mut sleep_time),
-            CommandStatus::CmdCircularRef
+            CommandStatus::CircularRef
         );
     }
 
@@ -923,7 +923,7 @@ mod tests {
         let mut sleep_time = 0.0;
         assert_eq!(
             evaluate_formula(&mut sheet, 1, 1, "SUM(A1)", &mut sleep_time),
-            CommandStatus::CmdUnrecognized
+            CommandStatus::Unrecognized
         );
     }
 
@@ -933,7 +933,7 @@ mod tests {
         let mut sleep_time = 0.0;
         assert_eq!(
             set_cell_value(&mut sheet, 0, 0, "A1", &mut sleep_time),
-            CommandStatus::CmdCircularRef
+            CommandStatus::CircularRef
         );
     }
 
@@ -979,7 +979,7 @@ mod tests {
         );
         assert_eq!(
             handle_command(&mut sheet, "visual Z9", &mut sleep_time),
-            CommandStatus::CmdUnrecognized
+            CommandStatus::Unrecognized
         );
     }
 
@@ -1012,7 +1012,7 @@ mod tests {
         let mut sleep_time = 0.0;
         assert_eq!(
             set_cell_value(&mut sheet, 0, 0, "A1", &mut sleep_time),
-            CommandStatus::CmdCircularRef
+            CommandStatus::CircularRef
         );
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
     }
@@ -1151,7 +1151,7 @@ mod tests {
         let mut sleep_time = 0.0;
         assert_eq!(
             set_cell_value(&mut sheet, 0, 0, "42", &mut sleep_time),
-            CommandStatus::CmdLockedCell
+            CommandStatus::LockedCell
         );
     }
 
@@ -1176,7 +1176,7 @@ mod tests {
         let mut sheet = create_test_spreadsheet(5, 5);
         assert_eq!(
             evaluate_arithmetic(&mut sheet, 0, 0, "A1=+B1"),
-            CommandStatus::CmdUnrecognized
+            CommandStatus::Unrecognized
         );
     }
 
@@ -1185,7 +1185,7 @@ mod tests {
         let mut sheet = create_test_spreadsheet(5, 5);
         assert_eq!(
             evaluate_arithmetic(&mut sheet, 0, 0, "A1/"),
-            CommandStatus::CmdUnrecognized
+            CommandStatus::Unrecognized
         );
     }
 
@@ -1194,7 +1194,7 @@ mod tests {
         let mut sheet = create_test_spreadsheet(5, 5);
         assert_eq!(
             evaluate_arithmetic(&mut sheet, 0, 0, "A1*B1*C1"),
-            CommandStatus::CmdUnrecognized
+            CommandStatus::Unrecognized
         );
     }
 
@@ -1215,7 +1215,7 @@ mod tests {
         let mut sleep_time = 0.0;
         assert_eq!(
             set_cell_value(&mut sheet, 0, 0, "A1+B1", &mut sleep_time),
-            CommandStatus::CmdCircularRef
+            CommandStatus::CircularRef
         );
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
     }

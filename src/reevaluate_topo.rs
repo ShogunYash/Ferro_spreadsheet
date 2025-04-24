@@ -754,7 +754,7 @@ mod tests {
         );
         assert_eq!(
             set_cell_value(&mut sheet, 0, 0, "B2", &mut sleep_time),
-            CommandStatus::CmdCircularRef
+            CommandStatus::CircularRef
         );
         assert!(!toposort_reval_detect_cycle(
             &mut sheet,

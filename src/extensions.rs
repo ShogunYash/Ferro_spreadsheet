@@ -228,7 +228,7 @@ mod tests {
         let sheet = Spreadsheet::create(5, 5).unwrap();
         // Try to save to an invalid path (should fail)
         let status = save_spreadsheet(&sheet, "/invalid_path/should_fail.sheet");
-        assert_eq!(status, crate::spreadsheet::CommandStatus::CmdUnrecognized);
+        assert_eq!(status, crate::spreadsheet::CommandStatus::Unrecognized);
     }
 
     #[test]
@@ -236,7 +236,7 @@ mod tests {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
         // Try to load a file that doesn't exist
         let status = load_spreadsheet(&mut sheet, "this_file_should_not_exist_123456.sheet");
-        assert_eq!(status, crate::spreadsheet::CommandStatus::CmdUnrecognized);
+        assert_eq!(status, crate::spreadsheet::CommandStatus::Unrecognized);
     }
 
     #[test]

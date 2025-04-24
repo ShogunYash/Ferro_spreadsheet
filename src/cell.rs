@@ -26,7 +26,7 @@ pub enum CellValue {
 /// # Returns
 ///
 /// * `Ok((row, col))` - A tuple of zero-based `(row, col)` indices if parsing succeeds.
-/// * `Err(CommandStatus::CmdUnrecognized)` - If the reference is invalid (e.g., empty, malformed, or out of bounds).
+/// * `Err(CommandStatus::Unrecognized)` - If the reference is invalid (e.g., empty, malformed, or out of bounds).
 ///
 /// # Examples
 ///
@@ -41,7 +41,7 @@ pub fn parse_cell_reference(
 ) -> Result<(i16, i16), CommandStatus> {
     let cell_ref = cell_ref.as_bytes();
     if cell_ref.is_empty() {
-        return Err(CommandStatus::CmdUnrecognized);
+        return Err(CommandStatus::Unrecognized);
     }
 
     // Find column/row split point in one pass
@@ -52,26 +52,26 @@ pub fn parse_cell_reference(
         col_length += 1;
         if col_length > 3 {
             // Max column length (e.g., "ZZZ")
-            return Err(CommandStatus::CmdUnrecognized);
+            return Err(CommandStatus::Unrecognized);
         }
         split_idx += 1;
     }
 
     // Verify we have columns and rows
     if col_length == 0 || split_idx == cell_ref.len() {
-        return Err(CommandStatus::CmdUnrecognized);
+        return Err(CommandStatus::Unrecognized);
     }
 
     // Verify remaining chars are digits
     for &byte in &cell_ref[split_idx..] {
         if !byte.is_ascii_digit() {
-            return Err(CommandStatus::CmdUnrecognized);
+            return Err(CommandStatus::Unrecognized);
         }
     }
 
     // Get column reference as a string slice (no allocation)
     let col_name =
-        std::str::from_utf8(&cell_ref[0..split_idx]).map_err(|_| CommandStatus::CmdUnrecognized)?;
+        std::str::from_utf8(&cell_ref[0..split_idx]).map_err(|_| CommandStatus::Unrecognized)?;
 
     // Parse row directly from bytes (avoid string allocation)
     let mut row: i16 = 0;
@@ -86,7 +86,7 @@ pub fn parse_cell_reference(
     let col = sheet.column_name_to_index(col_name);
     // Check row and column bounds
     if row < 0 || col < 0 || row >= sheet.rows || col >= sheet.cols {
-        return Err(CommandStatus::CmdUnrecognized);
+        return Err(CommandStatus::Unrecognized);
     }
     Ok((row, col))
 }
@@ -107,8 +107,8 @@ mod tests {
         let sheet = create_test_spreadsheet(10, 10);
         assert_eq!(parse_cell_reference(&sheet, "A1"), Ok((0, 0)));
         assert_eq!(parse_cell_reference(&sheet, "B2"), Ok((1, 1)));
-        assert_eq!(parse_cell_reference(&sheet, "AA10"), Err(CommandStatus::CmdUnrecognized));
-        assert_eq!(parse_cell_reference(&sheet, "ZZZ999"), Err(CommandStatus::CmdUnrecognized));
+        assert_eq!(parse_cell_reference(&sheet, "AA10"), Err(CommandStatus::Unrecognized));
+        assert_eq!(parse_cell_reference(&sheet, "ZZZ999"), Err(CommandStatus::Unrecognized));
     }
 
     #[test]
@@ -116,23 +116,23 @@ mod tests {
         let sheet = create_test_spreadsheet(10, 10);
         assert_eq!(
             parse_cell_reference(&sheet, "1A"),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
         assert_eq!(
             parse_cell_reference(&sheet, "A"),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
         assert_eq!(
             parse_cell_reference(&sheet, "A1B"),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
         assert_eq!(
             parse_cell_reference(&sheet, "AAAA1"),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
         assert_eq!(
             parse_cell_reference(&sheet, ""),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
     }
 
@@ -141,15 +141,15 @@ mod tests {
         let sheet = create_test_spreadsheet(10, 10);
         assert_eq!(
             parse_cell_reference(&sheet, "A1000"),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
         assert_eq!(
             parse_cell_reference(&sheet, "ZZZ1000"),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
         assert_eq!(
             parse_cell_reference(&sheet, "A0"),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
     }
 

@@ -22,7 +22,7 @@ pub fn visualize_cell_relationships(
     col: i16,
 ) -> CommandStatus {
     if row < 0 || row >= spreadsheet.rows || col < 0 || col >= spreadsheet.cols {
-        return CommandStatus::CmdInvalidCell;
+        return CommandStatus::InvalidCell;
     }
 
     // Get the cell key
@@ -246,7 +246,7 @@ mod tests {
         let sheet = create_test_spreadsheet(5, 5);
         assert_eq!(
             visualize_cell_relationships(&sheet, 5, 5),
-            CommandStatus::CmdInvalidCell
+            CommandStatus::InvalidCell
         );
     }
 
@@ -349,7 +349,7 @@ mod tests {
         let sheet = create_test_spreadsheet(5, 5);
         assert_eq!(
             visualize_cell_relationships(&sheet, -1, 0),
-            CommandStatus::CmdInvalidCell
+            CommandStatus::InvalidCell
         );
     }
 }

@@ -162,11 +162,11 @@ fn main() {
             // Update last_status based on the current command status
             last_status = match status {
                 CommandStatus::CmdOk => "ok",
-                CommandStatus::CmdUnrecognized => "unrecognized_cmd",
-                CommandStatus::CmdCircularRef => "circular_ref",
-                CommandStatus::CmdInvalidCell => "invalid_cell",
-                CommandStatus::CmdLockedCell => "locked_cell",
-                CommandStatus::CmdNotLockedCell => "not_locked_cell",
+                CommandStatus::Unrecognized => "unrecognized_cmd",
+                CommandStatus::CircularRef => "circular_ref",
+                CommandStatus::InvalidCell => "invalid_cell",
+                CommandStatus::LockedCell => "locked_cell",
+                CommandStatus::NotLockedCell => "not_locked_cell",
             };
         }
     }
@@ -191,20 +191,20 @@ fn main() {
 //     // Test valid commands
 
 //     // Test invalid commands
-//     assert_eq!(process_command(&mut sheet, "invalid_command", &mut last_time), CommandStatus::CmdUnrecognized);
+//     assert_eq!(process_command(&mut sheet, "invalid_command", &mut last_time), CommandStatus::Unrecognized);
 
 //     // Test circular reference
 //     process_command(&mut sheet, "A1=10", &mut last_time);
 //     process_command(&mut sheet, "B1=A1+5", &mut last_time);
-//     assert_eq!(process_command(&mut sheet, "A1=B1+2", &mut last_time), CommandStatus::CmdCircularRef);
+//     assert_eq!(process_command(&mut sheet, "A1=B1+2", &mut last_time), CommandStatus::CircularRef);
 
 //     // Test invalid cell reference
-//     assert_eq!(process_command(&mut sheet, "Z99=42", &mut last_time), CommandStatus::CmdInvalidCell);
+//     assert_eq!(process_command(&mut sheet, "Z99=42", &mut last_time), CommandStatus::InvalidCell);
 
 //     // Test lock/unlock functionality
 //     process_command(&mut sheet, "lock A2", &mut last_time);
-//     assert_eq!(process_command(&mut sheet, "A2=42", &mut last_time), CommandStatus::CmdLockedCell);
-//     assert_eq!(process_command(&mut sheet, "unlock B2", &mut last_time), CommandStatus::CmdNotLockedCell);
+//     assert_eq!(process_command(&mut sheet, "A2=42", &mut last_time), CommandStatus::LockedCell);
+//     assert_eq!(process_command(&mut sheet, "unlock B2", &mut last_time), CommandStatus::NotLockedCell);
 // }
 
 // Test the save functionality

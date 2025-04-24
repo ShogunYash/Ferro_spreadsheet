@@ -237,11 +237,11 @@ pub fn eval_avg(
 /// # Returns
 ///
 /// * `Ok(Range)` - The parsed range.
-/// * `Err(CommandStatus::CmdUnrecognized)` - If the range is invalid
+/// * `Err(CommandStatus::Unrecognized)` - If the range is invalid
 pub fn parse_range(spreadsheet: &Spreadsheet, range_str: &str) -> Result<Range, CommandStatus> {
     // Check for minimum valid range pattern length (like "A1:A1")
     if range_str.len() < 3 {
-        return Err(CommandStatus::CmdUnrecognized);
+        return Err(CommandStatus::Unrecognized);
     }
 
     // Find the colon index using bytes to avoid UTF-8 decoding
@@ -257,7 +257,7 @@ pub fn parse_range(spreadsheet: &Spreadsheet, range_str: &str) -> Result<Range, 
 
     // Validate colon position (must exist and have chars on both sides)
     if colon_index == 0 || colon_index + 1 >= range_str.len() {
-        return Err(CommandStatus::CmdUnrecognized);
+        return Err(CommandStatus::Unrecognized);
     }
 
     // Avoid creating new strings by using slices
@@ -276,7 +276,7 @@ pub fn parse_range(spreadsheet: &Spreadsheet, range_str: &str) -> Result<Range, 
         || start_row > end_row
         || start_col > end_col
     {
-        return Err(CommandStatus::CmdUnrecognized);
+        return Err(CommandStatus::Unrecognized);
     }
 
     // Construct the Range directly
@@ -430,19 +430,19 @@ mod tests {
         let sheet = create_test_spreadsheet(5, 5);
         assert_eq!(
             parse_range(&sheet, "A"),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
         assert_eq!(
             parse_range(&sheet, "A1:"),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
         assert_eq!(
             parse_range(&sheet, ":A1"),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
         assert_eq!(
             parse_range(&sheet, "B2:A1"),
-            Err(CommandStatus::CmdUnrecognized)
+            Err(CommandStatus::Unrecognized)
         );
     }
 }

@@ -137,7 +137,7 @@ fn handle_normal_mode_command(
                                 start_key,
                                 end_key,
                             ),
-                            _ => CommandStatus::CmdUnrecognized,
+                            _ => CommandStatus::Unrecognized,
                         };
 
                         // If successful, display the result
@@ -163,12 +163,12 @@ fn handle_normal_mode_command(
                         }
                     }
                     Err(_) => {
-                        return CommandStatus::CmdUnrecognized;
+                        return CommandStatus::Unrecognized;
                     }
                 }
             }
         }
-        return CommandStatus::CmdUnrecognized;
+        return CommandStatus::Unrecognized;
     }
 
     // File commands
@@ -188,7 +188,7 @@ fn handle_normal_mode_command(
                 state.save_file = Some(file.clone());
                 return save_spreadsheet(sheet, &file);
             } else {
-                return CommandStatus::CmdUnrecognized;
+                return CommandStatus::Unrecognized;
             }
         }
 
@@ -216,7 +216,7 @@ fn handle_normal_mode_command(
                 return status;
             } else {
                 // No file specified
-                return CommandStatus::CmdUnrecognized;
+                return CommandStatus::Unrecognized;
             }
         }
 
@@ -228,10 +228,10 @@ fn handle_normal_mode_command(
                         state.save_file = None;
                         return CommandStatus::CmdOk;
                     }
-                    Err(_) => return CommandStatus::CmdUnrecognized,
+                    Err(_) => return CommandStatus::Unrecognized,
                 }
             } else {
-                return CommandStatus::CmdUnrecognized;
+                return CommandStatus::Unrecognized;
             }
         }
     }
@@ -372,11 +372,11 @@ fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus
             CommandStatus::CmdOk
         } else {
             // Value is an error
-            CommandStatus::CmdUnrecognized
+            CommandStatus::Unrecognized
         }
     } else {
         // Nothing in clipboard
-        CommandStatus::CmdUnrecognized
+        CommandStatus::Unrecognized
     }
 }
 
@@ -653,7 +653,7 @@ mod tests {
 
         // Try to paste
         let result = handle_vim_command(&mut sheet, "p", &mut state);
-        assert_eq!(result, CommandStatus::CmdUnrecognized);
+        assert_eq!(result, CommandStatus::Unrecognized);
     }
 
     #[test]
@@ -665,7 +665,7 @@ mod tests {
 
         // Try to paste
         let result = handle_vim_command(&mut sheet, "p", &mut state);
-        assert_eq!(result, CommandStatus::CmdUnrecognized);
+        assert_eq!(result, CommandStatus::Unrecognized);
     }
 
     #[test]
@@ -685,7 +685,7 @@ mod tests {
         let (mut sheet, mut state) = setup();
         assert_eq!(
             handle_vim_command(&mut sheet, ":w", &mut state),
-            CommandStatus::CmdUnrecognized
+            CommandStatus::Unrecognized
         );
     }
 

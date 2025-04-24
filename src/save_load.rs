@@ -17,7 +17,7 @@ use std::path::Path;
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - On success.
-/// * `CommandStatus::CmdUnrecognized` - If file operations fail
+/// * `CommandStatus::Unrecognized` - If file operations fail
 pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
     let path = Path::new(filename);
 
@@ -31,7 +31,7 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
         Ok(file) => file,
         Err(e) => {
             eprintln!("Failed to create or open file '{}': {}", filename, e);
-            return CommandStatus::CmdUnrecognized;
+            return CommandStatus::Unrecognized;
         }
     };
 
@@ -41,7 +41,7 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
     // Write header with dimensions
     if let Err(e) = writeln!(writer, "DIMS,{},{}", sheet.rows, sheet.cols) {
         eprintln!("Failed to write to file '{}': {}", filename, e);
-        return CommandStatus::CmdUnrecognized;
+        return CommandStatus::Unrecognized;
     }
 
     // Write cell data with formulas
@@ -64,13 +64,13 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
                     CellValue::Integer(val) => {
                         if let Err(e) = write!(writer, "CELL,{},{}", cell_ref, val) {
                             eprintln!("Failed to write cell data to '{}': {}", filename, e);
-                            return CommandStatus::CmdUnrecognized;
+                            return CommandStatus::Unrecognized;
                         }
                     }
                     CellValue::Error => {
                         if let Err(e) = write!(writer, "CELL,{},ERR", cell_ref) {
                             eprintln!("Failed to write cell data to '{}': {}", filename, e);
-                            return CommandStatus::CmdUnrecognized;
+                            return CommandStatus::Unrecognized;
                         }
                     }
                 }
@@ -100,7 +100,7 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
                             meta.formula, parent1_ref, parent2_ref
                         ) {
                             eprintln!("Failed to write formula data to '{}': {}", filename, e);
-                            return CommandStatus::CmdUnrecognized;
+                            return CommandStatus::Unrecognized;
                         }
                     }
                 }
@@ -108,7 +108,7 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
                 // End the line
                 if let Err(e) = writeln!(writer) {
                     eprintln!("Failed to write to '{}': {}", filename, e);
-                    return CommandStatus::CmdUnrecognized;
+                    return CommandStatus::Unrecognized;
                 }
             }
         }
@@ -117,7 +117,7 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
     // Explicitly flush to ensure all data is written
     if let Err(e) = writer.flush() {
         eprintln!("Failed to flush data to '{}': {}", filename, e);
-        return CommandStatus::CmdUnrecognized;
+        return CommandStatus::Unrecognized;
     }
 
     eprintln!("Spreadsheet successfully saved to '{}'", filename);
@@ -134,14 +134,14 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - On success (even with partial data).
-/// * `CommandStatus::CmdUnrecognized` - If the file cannot be opened
+/// * `CommandStatus::Unrecognized` - If the file cannot be opened
 pub fn load_spreadsheet(sheet: &mut Spreadsheet, filename: &str) -> CommandStatus {
     let path = Path::new(filename);
 
     // Open file for reading
     let file = match File::open(path) {
         Ok(file) => file,
-        Err(_) => return CommandStatus::CmdUnrecognized,
+        Err(_) => return CommandStatus::Unrecognized,
     };
 
     // Create a buffered reader
@@ -422,7 +422,7 @@ mod tests {
         let result = save_spreadsheet(&sheet, "/nonexistent/directory/file.ss");
 
         // Should return error status
-        assert_eq!(result, CommandStatus::CmdUnrecognized);
+        assert_eq!(result, CommandStatus::Unrecognized);
     }
 
     #[test]
@@ -574,7 +574,7 @@ mod tests {
         let mut sheet = Spreadsheet::create(10, 10).unwrap();
         let result = load_spreadsheet(&mut sheet, "nonexistent_file.ss");
 
-        assert_eq!(result, CommandStatus::CmdUnrecognized);
+        assert_eq!(result, CommandStatus::Unrecognized);
     }
 
     #[test]
