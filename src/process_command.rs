@@ -21,11 +21,10 @@ pub fn process_command(
 ) -> CommandStatus {
     // Process the command and measure execution time
     let mut sleep_time = 0.0; // Initialize sleep_time to 0.0
-    let command_time;
     // Pass by reference instead of cloning
     let start = Instant::now();
     let status = handle_command(sheet, command, &mut sleep_time);
-    command_time = start.elapsed().as_secs_f64();
+    let command_time = start.elapsed().as_secs_f64();
 
     if sleep_time <= command_time {
         sleep_time = 0.0;
