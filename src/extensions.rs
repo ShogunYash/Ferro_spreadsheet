@@ -48,7 +48,7 @@ pub fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
                 2 => format!("{}-{}", left, right),
                 4 => format!("{}*{}", left, right),
                 3 => format!("{}/{}", left, right),
-                8 => format!("{}", left),
+                8 => left.to_string(),
                 _ => format!("SLEEP({})", left),
             }
         }
