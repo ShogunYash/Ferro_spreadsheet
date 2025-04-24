@@ -140,15 +140,6 @@ pub fn visualize_cell_relationships(
     {
         Ok(_) => {
             println!("Cell relationship diagram generated as {}", output_file);
-            // Try to open the image with the default viewer
-            #[cfg(target_os = "windows")]
-            let _ = Command::new("cmd").args(["/C", &output_file]).spawn();
-
-            #[cfg(target_os = "macos")]
-            let _ = Command::new("open").arg(&output_file).spawn();
-
-            #[cfg(target_os = "linux")]
-            let _ = Command::new("xdg-open").arg(&output_file).spawn();
         }
         Err(_) => {
             println!("Graphviz not found. You can manually convert the .dot file to an image.");

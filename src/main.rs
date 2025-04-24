@@ -11,6 +11,7 @@ mod graph;
 mod process_command;
 mod reevaluate_topo;
 mod save_load;
+mod sheet_extra_impl;
 mod spreadsheet;
 mod vim_mode;
 mod visualize_cells;
