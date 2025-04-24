@@ -170,7 +170,7 @@ impl Spreadsheet {
 
     /// Computes the unique key for a cell.
     pub fn get_key(&self, row: i16, col: i16) -> i32 {
-        (row as i32 * self.cols as i32 + col as i32) as i32
+        row as i32 * self.cols as i32 + col as i32
     }
 
     // Helper to get coordinates from cell key
