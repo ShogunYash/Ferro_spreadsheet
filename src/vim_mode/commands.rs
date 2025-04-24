@@ -79,11 +79,10 @@ fn handle_normal_mode_command(
             _ => {}
         }
     }
+
     // 2D range selection and processing all their avg/sum/min/max/stdev but not updating it
     // command type "V (A1:ZZZ999) SUM"
-    if input.starts_with("V ") {
-        let command = &input[2..];
-
+    if let Some(command) = input.strip_prefix("V ") {
         // Find the range within parentheses
         let start_paren = command.find('(');
         let end_paren = command.find(')');
@@ -171,7 +170,7 @@ fn handle_normal_mode_command(
         }
         return CommandStatus::CmdUnrecognized;
     }
-    
+
     // File commands
     if let Some(cmd) = input.strip_prefix(':') {
         // :w - write file
