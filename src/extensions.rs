@@ -1,5 +1,17 @@
 use crate::spreadsheet::Spreadsheet;
 
+/// Generates a string representation of a cell’s formula.
+///
+/// # Arguments
+///
+/// * `sheet` - The spreadsheet.
+/// * `row` - The cell’s row.
+/// * `col` - The cell’s column.
+///
+/// # Returns
+///
+/// A string like "A1+B1" or "SUM(A1:B2)", or "No formula" if none
+
 pub fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
     let meta = sheet.get_cell_meta_ref(row, col);
     if meta.formula == -1 {
@@ -13,11 +25,11 @@ pub fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
     match rem {
         0 => {
             let (left, right) = {
-                    let (left_row, left_col) = sheet.get_row_col(parent1);
-                    let (right_row, right_col) = sheet.get_row_col(parent2);
-                    let left_name = sheet.get_cell_name(left_row, left_col);
-                    let right_name = sheet.get_cell_name(right_row, right_col);
-                    (left_name, right_name)
+                let (left_row, left_col) = sheet.get_row_col(parent1);
+                let (right_row, right_col) = sheet.get_row_col(parent2);
+                let left_name = sheet.get_cell_name(left_row, left_col);
+                let right_name = sheet.get_cell_name(right_row, right_col);
+                (left_name, right_name)
             };
             match msb {
                 1 => format!("{}+{}", left, right),
@@ -89,24 +101,22 @@ pub fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
             let end_name = sheet.get_cell_name(end_row, end_col);
             format!("STDEV({}:{})", start_name, end_name)
         }
-        _ => "Unknown formula".to_string()
+        _ => "Unknown formula".to_string(),
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::save_load::{load_spreadsheet, save_spreadsheet};
     use crate::spreadsheet::Spreadsheet;
     use std::fs::{self, File};
     use std::io::Write;
-    use crate::save_load::{save_spreadsheet, load_spreadsheet};
 
     #[test]
     fn test_get_formula_string_basic_operations() {
         let mut sheet = Spreadsheet::create(10, 10).unwrap();
-        
+
         // Test subtraction (A1 - B2)
         let a1_pos = sheet.get_key(0, 0);
         let b2_pos = sheet.get_key(1, 1);
@@ -134,38 +144,38 @@ mod tests {
     #[test]
     fn test_get_formula_string_functions() {
         let mut sheet = Spreadsheet::create(10, 10).unwrap();
-        
+
         let a1_pos = sheet.get_key(0, 0);
         let c3_pos = sheet.get_key(2, 2);
-        
+
         // Test SUM function
         let meta = sheet.get_cell_meta(1, 1);
         meta.formula = 5; // Range function with code 5 for SUM
         meta.parent1 = a1_pos;
         meta.parent2 = c3_pos;
         assert_eq!(get_formula_string(&sheet, 1, 1), "SUM(A1:C3)");
-        
+
         // Test AVG function
         let meta = sheet.get_cell_meta(1, 2);
         meta.formula = 6; // Range function with code 6 for AVG
         meta.parent1 = a1_pos;
         meta.parent2 = c3_pos;
         assert_eq!(get_formula_string(&sheet, 1, 2), "AVG(A1:C3)");
-        
+
         // Test MIN function
         let meta = sheet.get_cell_meta(1, 3);
         meta.formula = 7; // Range function with code 7 for MIN
         meta.parent1 = a1_pos;
         meta.parent2 = c3_pos;
         assert_eq!(get_formula_string(&sheet, 1, 3), "MIN(A1:C3)");
-        
+
         // Test MAX function
         let meta = sheet.get_cell_meta(1, 4);
         meta.formula = 8; // Range function with code 8 for MAX
         meta.parent1 = a1_pos;
         meta.parent2 = c3_pos;
         assert_eq!(get_formula_string(&sheet, 1, 4), "MAX(A1:C3)");
-        
+
         // Test STDEV function
         let meta = sheet.get_cell_meta(1, 5);
         meta.formula = 9; // Range function with code 9 for STDEV
@@ -177,23 +187,23 @@ mod tests {
     #[test]
     fn test_get_formula_string_special_cases() {
         let mut sheet = Spreadsheet::create(10, 10).unwrap();
-        
+
         let a1_pos = sheet.get_key(0, 0);
-        
+
         // Test cell reference
         let meta = sheet.get_cell_meta(2, 0);
         meta.formula = 82; // Special formula for cell reference
         meta.parent1 = a1_pos;
         meta.parent2 = -1;
         assert_eq!(get_formula_string(&sheet, 2, 0), "A1");
-        
+
         // Test SLEEP function
         let meta = sheet.get_cell_meta(2, 1);
         meta.formula = 102; // Special formula for SLEEP
         meta.parent1 = a1_pos;
         meta.parent2 = -1;
         assert_eq!(get_formula_string(&sheet, 2, 1), "SLEEP(A1)");
-        
+
         // Test direct SLEEP function with code 102
         let meta = sheet.get_cell_meta(2, 2);
         meta.formula = 102;
@@ -205,7 +215,7 @@ mod tests {
     #[test]
     fn test_get_formula_string_invalid_cases() {
         let mut sheet = Spreadsheet::create(10, 10).unwrap();
-        
+
         // Test no formula
         let meta = sheet.get_cell_meta(3, 0);
         meta.formula = -1;

@@ -1,12 +1,27 @@
-// vim_mode/commands.rs
+//! Command handling for the Vim-mode interface.
+//!
+//! Processes Vim-specific commands, including navigation, editing, and file operations.
+
 use super::editor::{EditorMode, EditorState};
-use crate::spreadsheet::{CommandStatus, Spreadsheet};
 use crate::cell::CellValue;
+use crate::formula::{eval_avg, eval_max, eval_min, eval_variance, parse_range, sum_value};
 use crate::graph::{self, remove_all_parents};
-use crate::save_load::save_spreadsheet;
 use crate::process_command::process_command;
-use crate::formula::{parse_range, eval_avg,eval_max,eval_min,eval_variance,sum_value};
-// Handle vim-specific commands
+use crate::save_load::save_spreadsheet;
+use crate::spreadsheet::{CommandStatus, Spreadsheet};
+
+/// Handles a Vim-specific command based on the editor’s mode.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `input` - The command string.
+/// * `state` - The mutable editor state.
+///
+/// # Returns
+///
+/// The status of command execution.
+
 pub fn handle_vim_command(
     sheet: &mut Spreadsheet,
     input: &str,
@@ -23,7 +38,19 @@ pub fn handle_vim_command(
     }
 }
 
-// Process commands in normal mode
+/// Processes commands in `Normal` mode.
+///
+/// Supports movement (`h`, `j`, `k`, `l`), editing (`d`, `y`, `p`), quitting (`q`), file operations (`:w`, `:wq`, `:!rm %`), range operations (`V`), and standard spreadsheet commands.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `input` - The command string.
+/// * `state` - The mutable editor state.
+///
+/// # Returns
+///
+/// The status of command execution.
 fn handle_normal_mode_command(
     sheet: &mut Spreadsheet,
     input: &str,
@@ -57,28 +84,28 @@ fn handle_normal_mode_command(
     // command type "V (A1:ZZZ999) SUM"
     if input.starts_with("V ") {
         let command = &input[2..];
-        
+
         // Find the range within parentheses
         let start_paren = command.find('(');
         let end_paren = command.find(')');
-        
+
         if let (Some(start_idx), Some(end_idx)) = (start_paren, end_paren) {
             if start_idx < end_idx {
                 // Extract the range string and operation
                 let range_str = &command[start_idx + 1..end_idx].trim();
                 let operation = command[end_idx + 1..].trim().to_uppercase();
-                
+
                 // Parse the range
                 match parse_range(sheet, range_str) {
                     Ok(range) => {
                         // Get the top-left and bottom-right cell keys
                         let start_key = sheet.get_key(range.start_row, range.start_col);
                         let end_key = sheet.get_key(range.end_row, range.end_col);
-                        
+
                         // Create a temporary copy of the sheet structure
                         // to compute the result without modifying the original
                         let mut temp_sheet = Spreadsheet::create(sheet.rows, sheet.cols).unwrap();
-                        
+
                         // Copy the relevant cells to the temp sheet
                         for r in range.start_row..=range.end_row {
                             for c in range.start_col..=range.end_col {
@@ -86,38 +113,57 @@ fn handle_normal_mode_command(
                                 *temp_sheet.get_mut_cell(r, c) = value;
                             }
                         }
-                        
+
                         // Create a temporary cell to store the result
                         let temp_row = 0;
                         let temp_col = 0;
-                        
+
                         // Apply the operation
                         let status = match operation.as_str() {
-                            "SUM" => sum_value(&mut temp_sheet, temp_row, temp_col, start_key, end_key),
-                            "AVG" => eval_avg(&mut temp_sheet, temp_row, temp_col, start_key, end_key),
-                            "MIN" => eval_min(&mut temp_sheet, temp_row, temp_col, start_key, end_key),
-                            "MAX" => eval_max(&mut temp_sheet, temp_row, temp_col, start_key, end_key),
-                            "STDEV" => eval_variance(&mut temp_sheet, temp_row, temp_col, start_key, end_key),
-                            _ => CommandStatus::CmdUnrecognized
+                            "SUM" => {
+                                sum_value(&mut temp_sheet, temp_row, temp_col, start_key, end_key)
+                            }
+                            "AVG" => {
+                                eval_avg(&mut temp_sheet, temp_row, temp_col, start_key, end_key)
+                            }
+                            "MIN" => {
+                                eval_min(&mut temp_sheet, temp_row, temp_col, start_key, end_key)
+                            }
+                            "MAX" => {
+                                eval_max(&mut temp_sheet, temp_row, temp_col, start_key, end_key)
+                            }
+                            "STDEV" => eval_variance(
+                                &mut temp_sheet,
+                                temp_row,
+                                temp_col,
+                                start_key,
+                                end_key,
+                            ),
+                            _ => CommandStatus::CmdUnrecognized,
                         };
-                        
+
                         // If successful, display the result
                         if status == CommandStatus::CmdOk {
                             let result = temp_sheet.get_cell(temp_row, temp_col);
-                            
+
                             // Calculate count of cells
-                            let cell_count = ((range.end_row - range.start_row + 1) as i32) * 
-                                            ((range.end_col - range.start_col + 1) as i32);
+                            let cell_count = ((range.end_row - range.start_row + 1) as i32)
+                                * ((range.end_col - range.start_col + 1) as i32);
                             // store command and command ans in the new defined commands in struct
-                            state.command_string = format!("{}({}) Cell count: {}", operation, range_str, cell_count);
-                            state.command_answer = format!("{} = {}", operation, match result {
-                                CellValue::Integer(val) => val.to_string(),
-                                CellValue::Error => "ERROR".to_string(),
-                            });
+                            state.command_string =
+                                format!("{}({}) Cell count: {}", operation, range_str, cell_count);
+                            state.command_answer = format!(
+                                "{} = {}",
+                                operation,
+                                match result {
+                                    CellValue::Integer(val) => val.to_string(),
+                                    CellValue::Error => "ERROR".to_string(),
+                                }
+                            );
                             state.command_true = true;
                             return CommandStatus::CmdOk;
                         }
-                    },
+                    }
                     Err(_) => {
                         return CommandStatus::CmdUnrecognized;
                     }
@@ -198,7 +244,19 @@ fn handle_normal_mode_command(
     process_command(sheet, input, &mut 0.0)
 }
 
-// Process commands in insert mode
+/// Processes commands in `Insert` mode.
+///
+/// Sets cell values at the cursor and handles mode switching.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `input` - The input string (value, formula, or "esc").
+/// * `state` - The mutable editor state.
+///
+/// # Returns
+///
+/// The status of command execution.
 fn handle_insert_mode_command(
     sheet: &mut Spreadsheet,
     input: &str,
@@ -221,19 +279,28 @@ fn handle_insert_mode_command(
     status
 }
 
-// Cut the current cell (copy + clear)
+/// Copies (yanks) the current cell to the clipboard.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `state` - The mutable editor state.
+///
+/// # Returns
+///
+/// The status of the operation.
 fn cut_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
     // First copy the cell
     let status = yank_cell(sheet, state);
     if status != CommandStatus::CmdOk {
         return status;
     }
-    
+
     let row = state.cursor_row;
     let col = state.cursor_col;
 
     *sheet.get_mut_cell(row, col) = CellValue::Integer(0);
-    
+
     // Reset formula metadata
     let cell_key = sheet.get_key(row, col);
     // Also remove this cell from any dependency tracking
@@ -243,21 +310,30 @@ fn cut_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
     CommandStatus::CmdOk
 }
 
-// Copy (yank) the current cell
+/// Copies (yanks) the current cell to the clipboard.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `state` - The mutable editor state.
+///
+/// # Returns
+///
+/// The status of the operation
 fn yank_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
     // Get the cell reference string and value
     let cell_value = sheet.get_cell(state.cursor_row, state.cursor_col).clone();
 
     // Get the formula for the cell (if any)
     let cell_key = sheet.get_key(state.cursor_row, state.cursor_col);
-    let formula = 
-        if let Some( _meta) = sheet.cell_meta.get(&cell_key) {
-                // Get the formula string from the cell metadata
-                let formula_string = crate::extensions::get_formula_string(sheet, state.cursor_row, state.cursor_col);
-                format!("{}", formula_string)
-        } else {
-            String::new()
-        };
+    let formula = if let Some(_meta) = sheet.cell_meta.get(&cell_key) {
+        // Get the formula string from the cell metadata
+        let formula_string =
+            crate::extensions::get_formula_string(sheet, state.cursor_row, state.cursor_col);
+        format!("{}", formula_string)
+    } else {
+        String::new()
+    };
 
     // Store in clipboard
     state.clipboard = Some((state.cursor_row, state.cursor_col, cell_value, formula));
@@ -265,7 +341,16 @@ fn yank_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus 
     CommandStatus::CmdOk
 }
 
-// Paste to the current cell
+/// Pastes the clipboard content to the current cell.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `state` - The mutable editor state.
+///
+/// # Returns
+///
+/// The status of the operation.
 fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus {
     if let Some((_row, _col, value, formula)) = &state.clipboard {
         // Check if value is not an error (different approach than comparing with Some(()))
@@ -282,7 +367,9 @@ fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus
                 // remove cell meta data and parents
                 remove_all_parents(sheet, state.cursor_row, state.cursor_col);
                 // Remove the formula from the cell metadata
-                sheet.cell_meta.remove(&sheet.get_key(state.cursor_row, state.cursor_col));
+                sheet
+                    .cell_meta
+                    .remove(&sheet.get_key(state.cursor_row, state.cursor_col));
                 *sheet.get_mut_cell(state.cursor_row, state.cursor_col) = value.clone();
             }
             CommandStatus::CmdOk
@@ -299,8 +386,8 @@ fn paste_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spreadsheet::Spreadsheet;
     use crate::cell::CellValue;
+    use crate::spreadsheet::Spreadsheet;
 
     // Helper function to set up test environment
     fn setup() -> (Spreadsheet, EditorState) {
@@ -324,25 +411,25 @@ mod tests {
     #[test]
     fn test_normal_mode_movement() {
         let (mut sheet, mut state) = setup();
-        
+
         // Test 'l' movement (right)
         let result = handle_vim_command(&mut sheet, "l", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
         assert_eq!(state.cursor_col, 1);
         assert_eq!(state.cursor_row, 0);
-        
+
         // Test 'j' movement (down)
         let result = handle_vim_command(&mut sheet, "j", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
         assert_eq!(state.cursor_col, 1);
         assert_eq!(state.cursor_row, 1);
-        
+
         // Test 'h' movement (left)
         let result = handle_vim_command(&mut sheet, "h", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
         assert_eq!(state.cursor_col, 0);
         assert_eq!(state.cursor_row, 1);
-        
+
         // Test 'k' movement (up)
         let result = handle_vim_command(&mut sheet, "k", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
@@ -357,9 +444,9 @@ mod tests {
         let result = handle_vim_command(&mut sheet, "i", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
         assert_eq!(state.mode, EditorMode::Insert);
-        
+
         // Test switching back to normal mode with Esc
-        let result =handle_vim_command(&mut sheet, "esc", &mut state);
+        let result = handle_vim_command(&mut sheet, "esc", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
         assert_eq!(state.mode, EditorMode::Normal);
     }
@@ -367,7 +454,7 @@ mod tests {
     #[test]
     fn test_quit_command() {
         let (mut sheet, mut state) = setup();
-        
+
         // Test quit with 'q'
         let result = handle_vim_command(&mut sheet, "q", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
@@ -385,10 +472,10 @@ mod tests {
     #[test]
     fn test_yank_paste_cell() {
         let (mut sheet, mut state) = setup();
-        
+
         // Set a value in the current cell
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(42);
-        
+
         // Test yanking the cell
         let result = handle_vim_command(&mut sheet, "y", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
@@ -398,13 +485,13 @@ mod tests {
             assert_eq!(*col, 0);
             assert_eq!(*value, CellValue::Integer(42));
         }
-        
+
         // Move cursor and paste
         handle_vim_command(&mut sheet, "j", &mut state); // Move down
         handle_vim_command(&mut sheet, "l", &mut state); // Move right
         let result = handle_vim_command(&mut sheet, "p", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
-        
+
         // Check if the value was pasted correctly
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(42));
     }
@@ -412,17 +499,17 @@ mod tests {
     #[test]
     fn test_cut_cell() {
         let (mut sheet, mut state) = setup();
-        
+
         // Set a value in the current cell
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(42);
-        
+
         // Test cutting the cell
         let result = handle_vim_command(&mut sheet, "d", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
-        
+
         // Check if the cell is now empty (0)
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
-        
+
         // Check if the value was stored in clipboard
         assert!(state.clipboard.is_some());
         if let Some((row, col, value, _)) = &state.clipboard {
@@ -435,17 +522,17 @@ mod tests {
     #[test]
     fn test_insert_mode_editing() {
         let (mut sheet, mut state) = setup();
-        
+
         // Switch to insert mode
         handle_vim_command(&mut sheet, "i", &mut state);
-        
+
         // Enter a value in insert mode
         let result = handle_vim_command(&mut sheet, "123", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
-        
+
         // Check if the value was set correctly
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(123));
-        
+
         // Check if cursor moved down after insertion (vim behavior)
         assert_eq!(state.cursor_row, 1);
         assert_eq!(state.cursor_col, 0);
@@ -454,12 +541,12 @@ mod tests {
     #[test]
     fn test_save_command() {
         let (mut sheet, mut state) = setup();
-        
+
         // Test save command with explicit filename
         // Note: This is a mock test that checks if the filename is stored
         // without actually writing to the filesystem
         let _result = handle_vim_command(&mut sheet, ":w test.sheet", &mut state);
-        
+
         // The actual save operation might fail in the test environment,
         // but we can check if the filename was stored in the state
         assert!(state.save_file.is_some());
@@ -469,14 +556,14 @@ mod tests {
     #[test]
     fn test_write_quit_command() {
         let (mut sheet, mut state) = setup();
-        
+
         // Test write and quit command with explicit filename
         let _result = handle_vim_command(&mut sheet, ":wq test.sheet", &mut state);
-        
+
         // Check if the filename was stored
         assert!(state.save_file.is_some());
         assert_eq!(state.save_file.unwrap(), "test.sheet");
-        
+
         // The should_quit flag may or may not be set depending on if the save was successful
         // In a real test environment, this might not work unless we mock the file system
     }
@@ -484,18 +571,18 @@ mod tests {
     #[test]
     fn test_paste_formula() {
         let (mut sheet, mut state) = setup();
-        
+
         // Create a cell with a formula (mock by directly setting the clipboard)
         state.clipboard = Some((0, 0, CellValue::Integer(42), "A1+B1".to_string()));
-        
+
         // Move cursor and paste
         state.cursor_row = 1;
         state.cursor_col = 1;
-        
+
         // Paste the formula
         let result = handle_vim_command(&mut sheet, "p", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
-        
+
         // Check if the formula was applied (this is difficult to test directly)
         // In a real test we'd need to check the cell metadata to verify the formula was set
     }
@@ -503,27 +590,27 @@ mod tests {
     #[test]
     fn test_movement_boundaries() {
         let (mut sheet, mut state) = setup();
-        
+
         // Test movement at boundaries
         // Move left at leftmost position
         let result = handle_vim_command(&mut sheet, "h", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
         assert_eq!(state.cursor_col, 0); // Should stay at 0
-        
+
         // Move up at topmost position
         let result = handle_vim_command(&mut sheet, "k", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
         assert_eq!(state.cursor_row, 0); // Should stay at 0
-        
+
         // Move to bottom-right corner
         state.cursor_row = 9;
         state.cursor_col = 9;
-        
+
         // Move right at rightmost position
         let result = handle_vim_command(&mut sheet, "l", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
         assert_eq!(state.cursor_col, 9); // Should stay at 9
-        
+
         // Move down at bottommost position
         let result = handle_vim_command(&mut sheet, "j", &mut state);
         assert_eq!(result, CommandStatus::CmdOk);
@@ -533,17 +620,17 @@ mod tests {
     #[test]
     fn test_command_history() {
         let (mut sheet, mut state) = setup();
-        
+
         // Execute a command
         handle_vim_command(&mut sheet, "i", &mut state);
-        
+
         // Check if it was added to history
         assert_eq!(state.command_history.len(), 1);
         assert_eq!(state.command_history[0], "i");
-        
+
         // Execute another command
         handle_vim_command(&mut sheet, "123", &mut state);
-        
+
         // Check if it was added to history
         assert_eq!(state.command_history.len(), 2);
         assert_eq!(state.command_history[1], "123");
@@ -552,10 +639,10 @@ mod tests {
     #[test]
     fn test_empty_input() {
         let (mut sheet, mut state) = setup();
-        
+
         // Test with empty input
         let _result = handle_vim_command(&mut sheet, "", &mut state);
-        
+
         // Empty input should not change history
         assert_eq!(state.command_history.len(), 0);
     }
@@ -563,10 +650,10 @@ mod tests {
     #[test]
     fn test_paste_with_empty_clipboard() {
         let (mut sheet, mut state) = setup();
-        
+
         // Ensure clipboard is empty
         state.clipboard = None;
-        
+
         // Try to paste
         let result = handle_vim_command(&mut sheet, "p", &mut state);
         assert_eq!(result, CommandStatus::CmdUnrecognized);
@@ -575,10 +662,10 @@ mod tests {
     #[test]
     fn test_paste_error_value() {
         let (mut sheet, mut state) = setup();
-        
+
         // Set clipboard to contain an error value
         state.clipboard = Some((0, 0, CellValue::Error, String::new()));
-        
+
         // Try to paste
         let result = handle_vim_command(&mut sheet, "p", &mut state);
         assert_eq!(result, CommandStatus::CmdUnrecognized);

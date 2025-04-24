@@ -1,12 +1,40 @@
 use crate::spreadsheet::{CommandStatus, Spreadsheet};
 
-/// Cell value representation
+/// Represents the possible values a cell in the spreadsheet can hold.
+///
+/// This enum defines the types of data a cell can contain, used throughout the spreadsheet application.
+///
+/// # Variants
+///
+/// * `Integer(i32)` - A 32-bit integer value.
+/// * `Error` - An error state, typically resulting from invalid operations (e.g., division by zero).
 #[derive(Debug, Clone, PartialEq)]
 pub enum CellValue {
     Integer(i32),
     Error,
 }
 
+/// Parses a cell reference string (e.g., "A1") into zero-based row and column indices.
+///
+/// This function converts a human-readable cell reference into coordinates usable by the spreadsheet's internal grid.
+///
+/// # Arguments
+///
+/// * `sheet` - A reference to the `Spreadsheet` for column name conversion.
+/// * `cell_ref` - The cell reference string (e.g., "A1", "ZZ10").
+///
+/// # Returns
+///
+/// * `Ok((row, col))` - A tuple of zero-based `(row, col)` indices if parsing succeeds.
+/// * `Err(CommandStatus::CmdUnrecognized)` - If the reference is invalid (e.g., empty, malformed, or out of bounds).
+///
+/// # Examples
+///
+/// ```rust
+/// let sheet = Spreadsheet::create(10, 10).unwrap();
+/// assert_eq!(parse_cell_reference(&sheet, "A1"), Ok((0, 0)));
+/// assert_eq!(parse_cell_reference(&sheet, "B2"), Ok((1, 1)));
+/// ```
 pub fn parse_cell_reference(
     sheet: &Spreadsheet,
     cell_ref: &str,
@@ -23,6 +51,7 @@ pub fn parse_cell_reference(
     while split_idx < cell_ref.len() && cell_ref[split_idx] >= b'A' && cell_ref[split_idx] <= b'Z' {
         col_length += 1;
         if col_length > 3 {
+            // Max column length (e.g., "ZZZ")
             return Err(CommandStatus::CmdUnrecognized);
         }
         split_idx += 1;
@@ -66,6 +95,8 @@ pub fn parse_cell_reference(
 mod tests {
     use super::*;
     use crate::spreadsheet::{CommandStatus, Spreadsheet};
+
+    /// Creates a test spreadsheet with the given dimensions
 
     fn create_test_spreadsheet(rows: i16, cols: i16) -> Spreadsheet {
         Spreadsheet::create(rows, cols).unwrap()

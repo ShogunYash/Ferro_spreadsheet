@@ -1,5 +1,16 @@
 use crate::spreadsheet::Spreadsheet;
 
+/// Adds child dependencies based on formula type.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `cell1` - First parent cell key (or constant if applicable).
+/// * `cell2` - Second parent cell key (or constant if applicable).
+/// * `formula` - Formula code determining dependency type.
+/// * `row` - Child cell row.
+/// * `col` - Child cell column.
+
 pub fn add_children(
     sheet: &mut Spreadsheet,
     cell1: i32,
@@ -25,6 +36,14 @@ pub fn add_children(
         sheet.add_range_child(cell1, cell2, child_key);
     }
 }
+
+/// Removes all parent dependencies for a cell.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The cell’s row.
+/// * `col` - The cell’s column
 
 pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
     // This removes the child row, col from its parent cells

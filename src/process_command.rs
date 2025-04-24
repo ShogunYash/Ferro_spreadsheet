@@ -1,12 +1,28 @@
 use crate::evaluator::handle_command;
+use crate::spreadsheet::{CommandStatus, Spreadsheet};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use crate::spreadsheet::{CommandStatus, Spreadsheet};
 
-pub fn process_command(sheet: &mut Spreadsheet, command: &str, last_time: &mut f64) -> CommandStatus {
+/// Processes a command, measuring execution time and handling sleep.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `command` - The command string.
+/// * `last_time` - Stores the total execution time (including sleep).
+///
+/// # Returns
+///
+/// The status of command execution
+
+pub fn process_command(
+    sheet: &mut Spreadsheet,
+    command: &str,
+    last_time: &mut f64,
+) -> CommandStatus {
     // Process the command and measure execution time
     let mut sleep_time = 0.0; // Initialize sleep_time to 0.0
-    let command_time ;
+    let command_time;
     // Pass by reference instead of cloning
     let start = Instant::now();
     let status = handle_command(sheet, command, &mut sleep_time);

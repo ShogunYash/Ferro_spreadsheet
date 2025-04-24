@@ -1,14 +1,23 @@
 use crate::cell::{CellValue, parse_cell_reference};
+use crate::formula::Range;
 use crate::visualize_cells;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use crate::formula::Range;
 
 // Constants
 const MAX_ROWS: i16 = 999; // Maximum number of rows in the spreadsheet   
 const MAX_COLS: i16 = 18278; // Maximum number of columns in the spreadsheet
 pub const MAX_DISPLAY: i16 = 15;
+
+/// Represents a highlighted relationship type for visualization.
+///
+/// # Variants
+///
+/// * `Parent` - Highlights parent cells.
+/// * `Child` - Highlights child cells.
+/// * `Both` - Highlights both (not typically used).
+/// * `None` - No highlighting.
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum HighlightType {
@@ -18,13 +27,31 @@ pub enum HighlightType {
     None,
 }
 
-// Structure to represent a range-based child relationship
+/// Represents a range-based dependency.
+///
+/// # Fields
+///
+/// * `start_key` - Starting cell key.
+/// * `end_key` - Ending cell key.
+/// * `child_key` - Dependent cell key.
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RangeChild {
     pub start_key: i32, // Range start cell key
     pub end_key: i32,   // Range end cell key
     pub child_key: i32, // Child cell key
 }
+
+/// Status codes for command execution.
+///
+/// # Variants
+///
+/// * `CmdOk` - Success.
+/// * `CmdUnrecognized` - Unknown command or error.
+/// * `CmdCircularRef` - Circular reference detected.
+/// * `CmdInvalidCell` - Invalid cell reference.
+/// * `CmdLockedCell` - Cell is locked.
+/// * `CmdNotLockedCell` - Cell is not locked.
 
 #[derive(Debug, PartialEq)]
 pub enum CommandStatus {
@@ -33,10 +60,17 @@ pub enum CommandStatus {
     CmdCircularRef,
     CmdInvalidCell,
     CmdLockedCell,
-    CmdNotLockedCell
+    CmdNotLockedCell,
 }
 
-// Modified CellMeta to remove children (they're now stored separately)
+/// Metadata for a cell’s formula and dependencies.
+///
+/// # Fields
+///
+/// * `formula` - Formula code.
+/// * `parent1` - First parent key or constant.
+/// * `parent2` - Second parent key or constant.
+
 #[derive(Debug, Clone)]
 pub struct CellMeta {
     pub formula: i16,
@@ -54,7 +88,29 @@ impl CellMeta {
     }
 }
 
-// Spreadsheet structure with HashMap of boxed HashSets for children
+/// The core spreadsheet structure.
+///
+/// Manages the grid, dependencies, and UI state.
+///
+/// # Fields
+///
+/// * `grid` - Vector of cell values.
+/// * `children` - Map of cell keys to child sets.
+/// * `range_children` - Range-based dependencies.
+/// * `cell_meta` - Map of cell keys to metadata.
+/// * `rows` - Number of rows.
+/// * `cols` - Number of columns.
+/// * `viewport_row` - Top row of the visible area.
+/// * `viewport_col` - Left column of the visible area.
+/// * `output_enabled` - Toggles display output.
+/// * `locked_ranges` - Locked cell ranges.
+/// * `named_ranges` - Named ranges.
+/// * `cell_history` - History of cell values.
+/// * `last_edited` - Last edited cell coordinates.
+/// * `highlight_cell` - Key of the highlighted cell.
+/// * `highlight_type` - Type of highlighting.
+/// * `display` - Number of rows/cols to display
+
 pub struct Spreadsheet {
     pub grid: Vec<CellValue>, // Vector of CellValues (contiguous in memory)
     pub children: HashMap<i32, Box<HashSet<i32>>>, // Map from cell key to boxed HashSet of children
@@ -75,7 +131,17 @@ pub struct Spreadsheet {
 }
 
 impl Spreadsheet {
-    // Create a new spreadsheet with specified dimensions
+    /// Creates a new spreadsheet with the given dimensions.
+    ///
+    /// # Arguments
+    ///
+    /// * `rows` - Number of rows (1 to 999).
+    /// * `cols` - Number of columns (1 to 18278).
+    ///
+    /// # Returns
+    ///
+    /// * `Some(Spreadsheet)` - If dimensions are valid.
+    /// * `None` - If dimensions are invalid.
     pub fn create(rows: i16, cols: i16) -> Option<Spreadsheet> {
         if rows < 1 || rows > MAX_ROWS || cols < 1 || cols > MAX_COLS {
             eprintln!("Invalid spreadsheet dimensions");
@@ -106,7 +172,7 @@ impl Spreadsheet {
         })
     }
 
-    // Helper to get cell key from coordinates
+    /// Computes the unique key for a cell.
     pub fn get_key(&self, row: i16, col: i16) -> i32 {
         (row as i32 * self.cols as i32 + col as i32) as i32
     }
@@ -257,11 +323,13 @@ impl Spreadsheet {
         if self.highlight_cell == -1 || self.highlight_type == HighlightType::None {
             return (false, HighlightType::None);
         }
-    
+
         // Check if it's a parent of the highlighted cell
         let meta = self.cell_meta.get(&self.highlight_cell);
         if let Some(meta) = meta {
-            if self.highlight_type == HighlightType::Parent || self.highlight_type == HighlightType::Both {
+            if self.highlight_type == HighlightType::Parent
+                || self.highlight_type == HighlightType::Both
+            {
                 let rem = meta.formula % 10;
                 match rem {
                     0 => {
@@ -279,7 +347,7 @@ impl Spreadsheet {
                             return (true, HighlightType::Parent);
                         }
                     }
-                    _  => {
+                    _ => {
                         if self.is_cell_in_range(cell_key, meta.parent1, meta.parent2) {
                             return (true, HighlightType::Parent);
                         }
@@ -287,20 +355,22 @@ impl Spreadsheet {
                 }
             }
         }
-        if self.highlight_type == HighlightType::Child || self.highlight_type == HighlightType::Both {
-            // get cell children and also it can be in range also 
+        if self.highlight_type == HighlightType::Child || self.highlight_type == HighlightType::Both
+        {
+            // get cell children and also it can be in range also
             let mut is_contains = false;
-            
+
             // Safely check if the highlight_cell has any children
             if let Some(children) = self.children.get(&self.highlight_cell) {
                 is_contains = children.contains(&cell_key);
             }
-            
+
             // Check range-based children
             is_contains |= self.range_children.iter().any(|rc| {
-                rc.child_key == cell_key && self.is_cell_in_range(self.highlight_cell, rc.start_key, rc.end_key)
+                rc.child_key == cell_key
+                    && self.is_cell_in_range(self.highlight_cell, rc.start_key, rc.end_key)
             });
-            
+
             if is_contains {
                 return (true, HighlightType::Child);
             }
@@ -308,30 +378,30 @@ impl Spreadsheet {
         // If not a parent or child, return false
         (false, HighlightType::None)
     }
-    
+
     pub fn print_spreadsheet_with_highlights(&self) {
         if !self.output_enabled {
             return;
         }
-    
+
         let start_row = self.viewport_row;
         let start_col = self.viewport_col;
         let display_row = min(self.rows - start_row, 10); // Display only a portion of the spreadsheet
         let display_col = min(self.cols - start_col, 10);
-    
+
         // ANSI color codes
         const RESET: &str = "\x1b[0m";
-        const RED: &str = "\x1b[1;31m";   // Bold red for parents
+        const RED: &str = "\x1b[1;31m"; // Bold red for parents
         const GREEN: &str = "\x1b[1;32m"; // Bold green for children
-        const CYAN: &str = "\x1b[1;36m";  // Bold cyan for main cell
-    
+        const CYAN: &str = "\x1b[1;36m"; // Bold cyan for main cell
+
         // Print column headers
         print!("     ");
         for i in 0..display_col {
             print!("{:<8} ", self.get_column_name(start_col + i));
         }
         println!();
-    
+
         // Print rows with data
         for i in 0..display_row {
             print!("{:<4} ", start_row + i + 1); // Show 1-based row numbers
@@ -340,30 +410,29 @@ impl Spreadsheet {
                 let col = start_col + j;
                 let cell_key = self.get_key(row, col);
                 let cell_value = self.get_cell(row, col);
-                
+
                 // Check if this cell should be highlighted - only check cells in view
                 let (is_highlighted, highlight_type) = self.is_highlighted(cell_key);
-                
+
                 // Apply appropriate color based on highlight status
                 // If it's the main highlighted cell itself
                 if cell_key == self.highlight_cell {
                     print!("{}", CYAN);
-                }
-                else if is_highlighted {
+                } else if is_highlighted {
                     match highlight_type {
                         HighlightType::Parent => print!("{}", RED),
                         HighlightType::Child => print!("{}", GREEN),
-                        HighlightType::Both => {}, // This shouldn't happen due to circular ref prevention
-                        HighlightType::None => {}, // Main highlighted cell
+                        HighlightType::Both => {} // This shouldn't happen due to circular ref prevention
+                        HighlightType::None => {} // Main highlighted cell
                     }
                 }
-                
+
                 // Print cell value
                 match cell_value {
                     CellValue::Integer(value) => print!("{:<8} ", value),
                     CellValue::Error => print!("{:<8} ", "ERR"),
                 }
-                
+
                 // Reset color if necessary
                 print!("{}", RESET);
             }
@@ -374,8 +443,7 @@ impl Spreadsheet {
     pub fn print_spreadsheet(&self) {
         if !self.output_enabled {
             return;
-        }
-        else if self.highlight_type != HighlightType::None {
+        } else if self.highlight_type != HighlightType::None {
             self.print_spreadsheet_with_highlights();
             return;
         }
@@ -405,6 +473,18 @@ impl Spreadsheet {
             println!();
         }
     }
+
+    /// Scrolls to a specific cell.
+    ///
+    /// # Arguments
+    ///
+    /// * `cell` - Cell reference (e.g., "A1").
+    ///
+    /// # Returns
+    ///
+    /// * `CommandStatus::CmdOk` - On success.
+    /// * `CommandStatus::CmdInvalidCell` - If out of bounds.
+    /// * `CommandStatus::CmdUnrecognized` - If parsing fails.
 
     pub fn scroll_to_cell(&mut self, cell: &str) -> CommandStatus {
         match parse_cell_reference(self, cell) {
@@ -474,7 +554,11 @@ impl Spreadsheet {
 
     pub fn is_cell_locked(&self, row: i16, col: i16) -> bool {
         for range in &self.locked_ranges {
-            if row >= range.start_row && row <= range.end_row && col >= range.start_col && col <= range.end_col {
+            if row >= range.start_row
+                && row <= range.end_row
+                && col >= range.start_col
+                && col <= range.end_col
+            {
                 return true;
             }
         }
@@ -494,8 +578,11 @@ impl Spreadsheet {
 
     pub fn get_cell_name(&self, row: i16, col: i16) -> String {
         for (name, range) in &self.named_ranges {
-            if range.start_row == row && range.start_col == col &&
-               range.end_row == row && range.end_col == col {
+            if range.start_row == row
+                && range.start_col == col
+                && range.end_row == row
+                && range.end_col == col
+            {
                 return name.clone();
             }
         }

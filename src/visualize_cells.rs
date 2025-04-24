@@ -1,3 +1,7 @@
+//! Visualization of cell relationships in the spreadsheet.
+//!
+//! Generates a graph of cell dependencies and saves it as a DOT file, optionally rendering it as an image.
+
 use crate::cell::CellValue;
 use crate::spreadsheet::{CommandStatus, Spreadsheet};
 // use petgraph::{
@@ -258,6 +262,23 @@ use std::{fs::File, io::Write, process::Command};
 
 //     CommandStatus::CmdOk
 // }
+
+/// Visualizes the relationships (parents and children) of a specified cell.
+///
+/// Creates a directed graph in DOT format, saves it to a file, and attempts to render it as a PNG using Graphviz.
+/// Also prints a textual representation of direct and range-based relationships.
+///
+/// # Arguments
+///
+/// * `spreadsheet` - The spreadsheet containing cell data.
+/// * `row` - The target cell’s row (zero-based).
+/// * `col` - The target cell’s column (zero-based).
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - On success or non-critical errors (e.g., Graphviz not found).
+/// * `CommandStatus::CmdInvalidCell` - If the cell coordinates are out of bounds.
+
 pub fn visualize_cell_relationships(
     spreadsheet: &Spreadsheet,
     row: i16,
@@ -312,7 +333,7 @@ pub fn visualize_cell_relationships(
             graph.add_edge(parent_idx, child_idx, "depends on");
         }
     }
-    
+
     // Process range-based parents (one level up)
     // Find range relationships where this cell is the child
     for rc in &spreadsheet.range_children {
@@ -321,15 +342,15 @@ pub fn visualize_cell_relationships(
             let (start_row, start_col) = spreadsheet.get_row_col(rc.start_key);
             let (end_row, end_col) = spreadsheet.get_row_col(rc.end_key);
             let range_label = format!(
-                "Range {}{}:{}{}", 
+                "Range {}{}:{}{}",
                 spreadsheet.get_column_name(start_col),
                 start_row + 1,
                 spreadsheet.get_column_name(end_col),
                 end_row + 1
             );
-            
+
             let range_node = graph.add_node(range_label);
-            
+
             // Add an edge from the range to the child
             graph.add_edge(range_node, node_indices[&cell_key], "range depends on");
         }
@@ -353,13 +374,13 @@ pub fn visualize_cell_relationships(
             graph.add_edge(parent_idx, child_idx, "used by");
         }
     }
-    
+
     // Process range-based children (one level down)
     // Find range relationships where this cell is within the range
     for rc in &spreadsheet.range_children {
         if spreadsheet.is_cell_in_range(cell_key, rc.start_key, rc.end_key) {
             let child_key = rc.child_key;
-            
+
             // Create child node if it doesn't exist
             let child_idx = if let Some(&idx) = node_indices.get(&child_key) {
                 idx
@@ -369,7 +390,7 @@ pub fn visualize_cell_relationships(
                 node_indices.insert(child_key, idx);
                 idx
             };
-            
+
             // Add edge from current cell to range-dependent child
             let parent_idx = node_indices[&cell_key];
             graph.add_edge(parent_idx, child_idx, "part of range used by");
@@ -443,7 +464,7 @@ pub fn visualize_cell_relationships(
             );
         }
     }
-    
+
     // Range-based parents
     for rc in &spreadsheet.range_children {
         if rc.child_key == cell_key {
@@ -467,7 +488,7 @@ pub fn visualize_cell_relationships(
     // Show children
     println!("  Children:");
     let mut has_children = false;
-    
+
     // Direct child cells
     if let Some(children) = spreadsheet.get_cell_children(cell_key) {
         if !children.is_empty() {
@@ -486,7 +507,7 @@ pub fn visualize_cell_relationships(
             }
         }
     }
-    
+
     // Range-based children - cells that depend on a range which includes this cell
     for rc in &spreadsheet.range_children {
         if spreadsheet.is_cell_in_range(cell_key, rc.start_key, rc.end_key) {
@@ -503,7 +524,7 @@ pub fn visualize_cell_relationships(
             );
         }
     }
-    
+
     if !has_children {
         println!("    (none)");
     }

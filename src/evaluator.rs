@@ -1,11 +1,23 @@
 use crate::cell::{CellValue, parse_cell_reference};
+use crate::extensions::get_formula_string;
+use crate::formula::Range;
 use crate::formula::parse_range;
 use crate::formula::{eval_avg, eval_max, eval_min, eval_variance, sum_value};
 use crate::graph::{add_children, remove_all_parents};
 use crate::reevaluate_topo::{sleep_fn, toposort_reval_detect_cycle};
-use crate::spreadsheet::{CommandStatus, Spreadsheet, HighlightType};
-use crate::formula::Range;
-use crate::extensions::get_formula_string;
+use crate::spreadsheet::{CommandStatus, HighlightType, Spreadsheet};
+
+/// Resolves a cell reference or named range to its coordinates.
+///
+/// # Arguments
+///
+/// * `sheet` - The spreadsheet containing named ranges.
+/// * `s` - The string to resolve (cell reference or name).
+///
+/// # Returns
+///
+/// * `Ok((row, col))` - The zero-based coordinates.
+/// * `Err(CommandStatus::CmdUnrecognized)` - If resolution fails
 
 fn resolve_cell_reference(sheet: &Spreadsheet, s: &str) -> Result<(i16, i16), CommandStatus> {
     if let Some(range) = sheet.named_ranges.get(s) {
@@ -18,6 +30,22 @@ fn resolve_cell_reference(sheet: &Spreadsheet, s: &str) -> Result<(i16, i16), Co
         parse_cell_reference(sheet, s)
     }
 }
+
+/// Handles the `SLEEP` command, setting a cell value and accumulating sleep time.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `expr` - The expression (cell reference or literal).
+/// * `sleep_time` - Accumulates sleep duration in seconds.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - On success.
+/// * `CommandStatus::CmdCircularRef` - If self-referencing.
+/// * `CommandStatus::CmdUnrecognized` - If expression is invalid.
 
 pub fn handle_sleep(
     sheet: &mut Spreadsheet,
@@ -73,6 +101,22 @@ pub fn handle_sleep(
 
     CommandStatus::CmdOk
 }
+
+/// Evaluates an arithmetic expression and updates a cell.
+///
+/// Supports literals, cell references, and operations (+, -, *, /).
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `expr` - The arithmetic expression.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - On success.
+/// * `CommandStatus::CmdUnrecognized` - If expression is invalid.
 
 pub fn evaluate_arithmetic(
     sheet: &mut Spreadsheet,
@@ -290,6 +334,21 @@ pub fn evaluate_arithmetic(
     CommandStatus::CmdOk
 }
 
+/// Evaluates a formula, supporting arithmetic and range functions.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `expr` - The formula (e.g., "A1+B1", "SUM(A1:B2)").
+/// * `sleep_time` - Accumulates sleep time for `SLEEP`.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - On success.
+/// * `CommandStatus::CmdUnrecognized` - If formula is invalid
+
 pub fn evaluate_formula(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -379,6 +438,23 @@ pub fn evaluate_formula(
     }
 }
 
+/// Sets a cell’s value based on an expression, managing dependencies.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `expr` - The expression to evaluate.
+/// * `sleep_time` - Accumulates sleep time.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - On success.
+/// * `CommandStatus::CmdCircularRef` - If a cycle is detected.
+/// * `CommandStatus::CmdLockedCell` - If the cell is locked.
+/// * `CommandStatus::CmdUnrecognized` - If expression is invalid.
+
 pub fn set_cell_value(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -420,34 +496,67 @@ pub fn set_cell_value(
             return CommandStatus::CmdCircularRef;
         } else {
             // If no cycle, update the cell history with the old value
-            sheet.cell_history.entry(cell_key).or_insert_with(Vec::new).push(old_value);
+            sheet
+                .cell_history
+                .entry(cell_key)
+                .or_insert_with(Vec::new)
+                .push(old_value);
             sheet.set_last_edited(row, col);
         }
     }
     status
 }
 
+/// Sets a cell's value directly, bypassing formula evaluation.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `value` - The `CellValue` to set.
+/// * `sleep_time` - Accumulates sleep time.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - On success.
+/// * `CommandStatus::CmdLockedCell` - If the cell is locked.
+
 fn set_cell_to_value(
     sheet: &mut Spreadsheet,
     row: i16,
     col: i16,
     value: CellValue,
-    sleep_time: &mut f64
+    sleep_time: &mut f64,
 ) -> CommandStatus {
     // Check if the cell is locked before setting the value
-        if sheet.is_cell_locked(row, col) {
-            return CommandStatus::CmdLockedCell;
-        }
-        // Check if the value is a valid integer
-        let cell_key = sheet.get_key(row, col);
-        // remove all parents and set the value                                             
-        remove_all_parents(sheet, row, col);
-        sheet.cell_meta.remove(&cell_key);
-        *sheet.get_mut_cell(row, col) = value;
-        toposort_reval_detect_cycle(sheet, row, col, sleep_time);
-        sheet.set_last_edited(row, col);
-        CommandStatus::CmdOk
+    if sheet.is_cell_locked(row, col) {
+        return CommandStatus::CmdLockedCell;
+    }
+    // Check if the value is a valid integer
+    let cell_key = sheet.get_key(row, col);
+    // remove all parents and set the value
+    remove_all_parents(sheet, row, col);
+    sheet.cell_meta.remove(&cell_key);
+    *sheet.get_mut_cell(row, col) = value;
+    toposort_reval_detect_cycle(sheet, row, col, sleep_time);
+    sheet.set_last_edited(row, col);
+    CommandStatus::CmdOk
 }
+
+/// Processes user commands, updating the spreadsheet accordingly.
+///
+/// Supports cell assignments, scrolling, locking, and more.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `trimmed` - The command string (trimmed).
+/// * `sleep_time` - Accumulates sleep time.
+///
+/// # Returns
+///
+/// The status of command execution (e.g., `CmdOk`, `CmdUnrecognized`)
 
 pub fn handle_command(
     sheet: &mut Spreadsheet,
@@ -572,14 +681,13 @@ pub fn handle_command(
         }
     }
 
-    if trimmed.starts_with("is_locked "){
+    if trimmed.starts_with("is_locked ") {
         let cell_ref: &str = trimmed.get(10..).unwrap_or("").trim();
         match resolve_cell_reference(sheet, cell_ref) {
             Ok((row, col)) => {
                 if sheet.is_cell_locked(row, col) {
                     return CommandStatus::CmdLockedCell;
-                }
-                else{
+                } else {
                     return CommandStatus::CmdNotLockedCell;
                 }
             }
@@ -650,7 +758,7 @@ pub fn handle_command(
             return CommandStatus::CmdInvalidCell;
         }
     }
-    
+
     if trimmed.starts_with("HLC ") {
         let cell_ref = &trimmed[4..];
         if let Ok((row, col)) = parse_cell_reference(sheet, cell_ref) {
@@ -660,7 +768,7 @@ pub fn handle_command(
             return CommandStatus::CmdInvalidCell;
         }
     }
-    
+
     if trimmed.starts_with("HLPC ") {
         let cell_ref = &trimmed[5..];
         if let Ok((row, col)) = parse_cell_reference(sheet, cell_ref) {
@@ -670,7 +778,7 @@ pub fn handle_command(
             return CommandStatus::CmdInvalidCell;
         }
     }
-    
+
     if trimmed == "HLOFF" {
         sheet.disable_highlight();
         return CommandStatus::CmdOk;
@@ -999,5 +1107,4 @@ mod tests {
         );
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5));
     }
-
 }

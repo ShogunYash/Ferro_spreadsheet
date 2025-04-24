@@ -3,6 +3,16 @@ use crate::formula::{eval_avg, eval_max, eval_min, eval_variance, sum_value};
 use crate::spreadsheet::Spreadsheet;
 use std::collections::HashSet;
 
+/// Sets a cell value and accumulates sleep time if positive.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `value` - The value to set.
+/// * `sleep_val` - Accumulates sleep time.
+
 pub fn sleep_fn(sheet: &mut Spreadsheet, row: i16, col: i16, value: i32, sleep_val: &mut f64) {
     *sheet.get_mut_cell(row, col) = CellValue::Integer(value);
     if value < 0 {
@@ -11,8 +21,17 @@ pub fn sleep_fn(sheet: &mut Spreadsheet, row: i16, col: i16, value: i32, sleep_v
     *sleep_val += value as f64;
 }
 
+/// Reevaluates a cell’s formula based on its metadata.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `sleep_val` - Accumulates sleep time.
+
 pub fn reevaluate_formula(sheet: &mut Spreadsheet, row: i16, col: i16, sleep_val: &mut f64) {
-    if sheet.is_cell_locked(row, col){
+    if sheet.is_cell_locked(row, col) {
         return;
     }
     let cell_meta = sheet.get_cell_meta(row, col);
@@ -131,9 +150,21 @@ pub fn reevaluate_formula(sheet: &mut Spreadsheet, row: i16, col: i16, sleep_val
     }
 }
 
-// rustdoc this function
-/// Performs a topological sort on the spreadsheet to reevaluate cells in the correct order.
-/// This function also detects cycles in the dependency graph. If a cycle is detected, it returns true.
+/// Performs a topological sort to reevaluate dependent cells and detect cycles.
+///
+/// Uses depth-first search to order cells and identify circular dependencies.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The updated cell’s row.
+/// * `col` - The updated cell’s column.
+/// * `sleep_val` - Accumulates sleep time.
+///
+/// # Returns
+///
+/// * `true` - If a cycle is detected.
+/// * `false` - If no cycle is detected.
 
 pub fn toposort_reval_detect_cycle(
     sheet: &mut Spreadsheet,
@@ -274,7 +305,7 @@ mod tests {
             let meta = sheet.get_cell_meta(1, 1);
             meta.parent1 = key1;
             meta.parent2 = key2;
-            meta.formula = 20; 
+            meta.formula = 20;
         }
         let mut sleep_time = 0.0;
         reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
@@ -297,8 +328,8 @@ mod tests {
         reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(1));
     }
-   
-   #[test]
+
+    #[test]
     fn test_reevaluate_formula_arithmetic4() {
         let mut sheet = create_test_spreadsheet(5, 5);
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
@@ -309,376 +340,375 @@ mod tests {
             let meta = sheet.get_cell_meta(1, 1);
             meta.parent1 = key1;
             meta.parent2 = key2;
-            meta.formula = 40; 
+            meta.formula = 40;
         }
         let mut sleep_time = 0.0;
         reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(6));
     }
-    
-     #[test]
-     fn test_reevaluate_formula_with_constant() {
-         let mut sheet = create_test_spreadsheet(5, 5);
-         // Set up cell value we'll reference
-         *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
-         
-         {
-             let key1 = sheet.get_key(0, 0);
-             let meta = sheet.get_cell_meta(1, 1);
-             meta.parent1 = key1;      // First parent is a cell reference
-             meta.parent2 = 7;       // -1 indicates no cell reference (constant)
-             meta.formula = 12;        // Addition
-                // The constant value to add
-         }
-         
-         let mut sleep_time = 0.0;
-         reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(10)); // 3 + 7 = 10
-     }
+
     #[test]
-     fn test_reevaluate_formula_with_constant2() {
+    fn test_reevaluate_formula_with_constant() {
         let mut sheet = create_test_spreadsheet(5, 5);
         // Set up cell value we'll reference
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
-        
+
         {
             let key1 = sheet.get_key(0, 0);
             let meta = sheet.get_cell_meta(1, 1);
-            meta.parent1 = key1;      // First parent is a cell reference
-            meta.parent2 = 3;       // -1 indicates no cell reference (constant)
-            meta.formula = 22;        // Addition
-               // The constant value to add
+            meta.parent1 = key1; // First parent is a cell reference
+            meta.parent2 = 7; // -1 indicates no cell reference (constant)
+            meta.formula = 12; // Addition
+            // The constant value to add
         }
-        
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(10)); // 3 + 7 = 10
+    }
+    #[test]
+    fn test_reevaluate_formula_with_constant2() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        // Set up cell value we'll reference
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
+
+        {
+            let key1 = sheet.get_key(0, 0);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = key1; // First parent is a cell reference
+            meta.parent2 = 3; // -1 indicates no cell reference (constant)
+            meta.formula = 22; // Addition
+            // The constant value to add
+        }
+
         let mut sleep_time = 0.0;
         reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(0)); // 3 + 7 = 10
     }
     #[test]
     fn test_reevaluate_formula_with_constant3() {
-       let mut sheet = create_test_spreadsheet(5, 5);
-       // Set up cell value we'll reference
-       *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
-       
-       {
-           let key1 = sheet.get_key(0, 0);
-           let meta = sheet.get_cell_meta(1, 1);
-           meta.parent1 = key1;      // First parent is a cell reference
-           meta.parent2 = 3;       // -1 indicates no cell reference (constant)
-           meta.formula = 32;        // Addition
-              // The constant value to add
-       }
-       
-       let mut sleep_time = 0.0;
-       reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-       assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(1)); // 3 + 7 = 10
-   }
-   #[test]
-   fn test_reevaluate_formula_with_constant4() {
-      let mut sheet = create_test_spreadsheet(5, 5);
-      // Set up cell value we'll reference
-      *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
-      
-      {
-          let key1 = sheet.get_key(0, 0);
-          let meta = sheet.get_cell_meta(1, 1);
-          meta.parent1 = key1;      // First parent is a cell reference
-          meta.parent2 = 3;       // -1 indicates no cell reference (constant)
-          meta.formula = 42;        // Addition
-             // The constant value to add
-      }
-      
-      let mut sleep_time = 0.0;
-      reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-      assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(9)); // 3 + 7 = 10
-  }
+        let mut sheet = create_test_spreadsheet(5, 5);
+        // Set up cell value we'll reference
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
+
+        {
+            let key1 = sheet.get_key(0, 0);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = key1; // First parent is a cell reference
+            meta.parent2 = 3; // -1 indicates no cell reference (constant)
+            meta.formula = 32; // Addition
+            // The constant value to add
+        }
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(1)); // 3 + 7 = 10
+    }
     #[test]
-  fn test_reevaluate_formula_with_constant4_error() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    // Set up cell value we'll reference
-    *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
-    
-    {
-        let key1 = sheet.get_key(0, 0);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = key1;      // First parent is a cell reference
-        meta.parent2 = 0;       // -1 indicates no cell reference (constant)
-        meta.formula = 32;        // Addition
-           // The constant value to add
-    }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Error); // 3 + 7 = 10
-}
-#[test]
-fn test_reevaluate_formula_with_constant5() {
-   let mut sheet = create_test_spreadsheet(5, 5);
-   // Set up cell value we'll reference
-   *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
-   
-   {
-       let key1 = sheet.get_key(0, 0);
-       let meta = sheet.get_cell_meta(1, 1);
-       meta.parent1 = key1;      // First parent is a cell reference
-       meta.parent2 = 3;       // -1 indicates no cell reference (constant)
-       meta.formula = 42;        // Addition
-          // The constant value to add
-   }
-   
-   let mut sleep_time = 0.0;
-   reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-   assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(9)); // 3 + 7 = 10
-}
+    fn test_reevaluate_formula_with_constant4() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        // Set up cell value we'll reference
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
 
+        {
+            let key1 = sheet.get_key(0, 0);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = key1; // First parent is a cell reference
+            meta.parent2 = 3; // -1 indicates no cell reference (constant)
+            meta.formula = 42; // Addition
+            // The constant value to add
+        }
 
-#[test]
-fn test_reevaluate_formula_remainder1_constant() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    // Parent 1 is a constant, parent 2 is a cell reference
-    *sheet.get_mut_cell(0, 1) = CellValue::Integer(5);
-    
-    {
-        let key2 = sheet.get_key(0, 1);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = 10;     // Constant value
-        meta.parent2 = key2;   // Cell reference
-        meta.formula = 13;     // Addition with constant first operand
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(9)); // 3 + 7 = 10
     }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(15)); // 10 + 5 = 15
-}
+    #[test]
+    fn test_reevaluate_formula_with_constant4_error() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        // Set up cell value we'll reference
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
 
-#[test]
-fn test_reevaluate_formula_remainder1_subtraction() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    // Parent 1 is a constant, parent 2 is a cell reference
-    *sheet.get_mut_cell(0, 1) = CellValue::Integer(5);
-    
-    {
-        let key2 = sheet.get_key(0, 1);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = 10;     // Constant value
-        meta.parent2 = key2;   // Cell reference
-        meta.formula = 23;     // Subtraction with constant first operand
-    }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5)); // 10 - 5 = 5
-}
+        {
+            let key1 = sheet.get_key(0, 0);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = key1; // First parent is a cell reference
+            meta.parent2 = 0; // -1 indicates no cell reference (constant)
+            meta.formula = 32; // Addition
+            // The constant value to add
+        }
 
-#[test]
-fn test_reevaluate_formula_remainder1_multiplication() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    // Parent 1 is a constant, parent 2 is a cell reference
-    *sheet.get_mut_cell(0, 1) = CellValue::Integer(5);
-    
-    {
-        let key2 = sheet.get_key(0, 1);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = 10;     // Constant value
-        meta.parent2 = key2;   // Cell reference
-        meta.formula = 43;     // Multiplication with constant first operand
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error); // 3 + 7 = 10
     }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(50)); // 10 * 5 = 50
-}
+    #[test]
+    fn test_reevaluate_formula_with_constant5() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        // Set up cell value we'll reference
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
 
-#[test]
-fn test_reevaluate_formula_remainder1_division() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    // Parent 1 is a constant, parent 2 is a cell reference
-    *sheet.get_mut_cell(0, 1) = CellValue::Integer(5);
-    
-    {
-        let key2 = sheet.get_key(0, 1);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = 10;     // Constant value
-        meta.parent2 = key2;   // Cell reference
-        meta.formula = 33;     // Division with constant first operand
-    }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(2)); // 10 / 5 = 2
-}
+        {
+            let key1 = sheet.get_key(0, 0);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = key1; // First parent is a cell reference
+            meta.parent2 = 3; // -1 indicates no cell reference (constant)
+            meta.formula = 42; // Addition
+            // The constant value to add
+        }
 
-#[test]
-fn test_reevaluate_formula_remainder1_division_by_zero() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    // Parent 1 is a constant, parent 2 is a cell reference
-    *sheet.get_mut_cell(0, 1) = CellValue::Integer(0);
-    
-    {
-        let key2 = sheet.get_key(0, 1);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = 10;     // Constant value
-        meta.parent2 = key2;   // Cell reference
-        meta.formula = 33;     // Division with constant first operand
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(9)); // 3 + 7 = 10
     }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Error); // Division by zero
-}
 
-#[test]
-fn test_reevaluate_formula_remainder1_error_reference() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    // Parent 2 contains an error
-    *sheet.get_mut_cell(0, 1) = CellValue::Error;
-    
-    {
-        let key2 = sheet.get_key(0, 1);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = 10;     // Constant value
-        meta.parent2 = key2;   // Cell reference with error
-        meta.formula = 13;     // Addition with constant first operand
-    }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Error); // Propagates error
-}
+    #[test]
+    fn test_reevaluate_formula_remainder1_constant() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        // Parent 1 is a constant, parent 2 is a cell reference
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(5);
 
-#[test]
-fn test_reevaluate_formula_copy_value() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    *sheet.get_mut_cell(0, 0) = CellValue::Integer(42);
-    
-    {
-        let key1 = sheet.get_key(0, 0);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = key1;
-        meta.parent2 = 0;      // Not used
-        meta.formula = 82;     // Copy value (8 is msb, 2 is remainder)
-    }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(42)); // Just copies the value
-}
+        {
+            let key2 = sheet.get_key(0, 1);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = 10; // Constant value
+            meta.parent2 = key2; // Cell reference
+            meta.formula = 13; // Addition with constant first operand
+        }
 
-#[test]
-fn test_reevaluate_formula_sleep() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
-    
-    {
-        let key1 = sheet.get_key(0, 0);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = key1;
-        meta.parent2 = 0;      // Not used
-        meta.formula = 92;     // Sleep function (9 is msb, 2 is remainder)
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(15)); // 10 + 5 = 15
     }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3)); // Value copied
-    assert_eq!(sleep_time, 3.0); // Sleep value incremented
-}
 
-#[test]
-fn test_reevaluate_formula_avg() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    *sheet.get_mut_cell(0, 0) = CellValue::Integer(2);
-    *sheet.get_mut_cell(0, 1) = CellValue::Integer(4);
-    *sheet.get_mut_cell(0, 2) = CellValue::Integer(6);
-    *sheet.get_mut_cell(0, 3) = CellValue::Integer(8);
-    
-    {
-        let start_key = sheet.get_key(0, 0);
-        let end_key = sheet.get_key(0, 3);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = start_key;
-        meta.parent2 = end_key;
-        meta.formula = 6;     // AVG function (0 is msb, 6 is remainder)
-    }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5)); // AVG of 2,4,6,8 = 5
-}
+    #[test]
+    fn test_reevaluate_formula_remainder1_subtraction() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        // Parent 1 is a constant, parent 2 is a cell reference
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(5);
 
-#[test]
-fn test_reevaluate_formula_min() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
-    *sheet.get_mut_cell(0, 1) = CellValue::Integer(1);
-    *sheet.get_mut_cell(0, 2) = CellValue::Integer(5);
-    
-    {
-        let start_key = sheet.get_key(0, 0);
-        let end_key = sheet.get_key(0, 2);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = start_key;
-        meta.parent2 = end_key;
-        meta.formula = 7;     // MIN function (0 is msb, 7 is remainder)
-    }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(1)); // MIN of 3,1,5 = 1
-}
+        {
+            let key2 = sheet.get_key(0, 1);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = 10; // Constant value
+            meta.parent2 = key2; // Cell reference
+            meta.formula = 23; // Subtraction with constant first operand
+        }
 
-#[test]
-fn test_reevaluate_formula_max() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
-    *sheet.get_mut_cell(0, 1) = CellValue::Integer(9);
-    *sheet.get_mut_cell(0, 2) = CellValue::Integer(5);
-    
-    {
-        let start_key = sheet.get_key(0, 0);
-        let end_key = sheet.get_key(0, 2);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = start_key;
-        meta.parent2 = end_key;
-        meta.formula = 8;     // MAX function (0 is msb, 8 is remainder)
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5)); // 10 - 5 = 5
     }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(9)); // MAX of 3,9,5 = 9
-}
 
-#[test]
-fn test_reevaluate_formula_variance() {
-    let mut sheet = create_test_spreadsheet(5, 5);
-    *sheet.get_mut_cell(0, 0) = CellValue::Integer(2);
-    *sheet.get_mut_cell(0, 1) = CellValue::Integer(4);
-    *sheet.get_mut_cell(0, 2) = CellValue::Integer(6);
-    
-    {
-        let start_key = sheet.get_key(0, 0);
-        let end_key = sheet.get_key(0, 2);
-        let meta = sheet.get_cell_meta(1, 1);
-        meta.parent1 = start_key;
-        meta.parent2 = end_key;
-        meta.formula = 9;     // VARIANCE function (0 is msb, 9 is remainder)
+    #[test]
+    fn test_reevaluate_formula_remainder1_multiplication() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        // Parent 1 is a constant, parent 2 is a cell reference
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(5);
+
+        {
+            let key2 = sheet.get_key(0, 1);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = 10; // Constant value
+            meta.parent2 = key2; // Cell reference
+            meta.formula = 43; // Multiplication with constant first operand
+        }
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(50)); // 10 * 5 = 50
     }
-    
-    let mut sleep_time = 0.0;
-    reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
-    // Variance of [2,4,6] = ((2-4)² + (4-4)² + (6-4)²) / 3 = (4 + 0 + 4) / 3 = 8/3 ≈ 2.67
-    // Integer truncation gives us 2
-    assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(2));
-}
+
+    #[test]
+    fn test_reevaluate_formula_remainder1_division() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        // Parent 1 is a constant, parent 2 is a cell reference
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(5);
+
+        {
+            let key2 = sheet.get_key(0, 1);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = 10; // Constant value
+            meta.parent2 = key2; // Cell reference
+            meta.formula = 33; // Division with constant first operand
+        }
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(2)); // 10 / 5 = 2
+    }
+
+    #[test]
+    fn test_reevaluate_formula_remainder1_division_by_zero() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        // Parent 1 is a constant, parent 2 is a cell reference
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(0);
+
+        {
+            let key2 = sheet.get_key(0, 1);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = 10; // Constant value
+            meta.parent2 = key2; // Cell reference
+            meta.formula = 33; // Division with constant first operand
+        }
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error); // Division by zero
+    }
+
+    #[test]
+    fn test_reevaluate_formula_remainder1_error_reference() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        // Parent 2 contains an error
+        *sheet.get_mut_cell(0, 1) = CellValue::Error;
+
+        {
+            let key2 = sheet.get_key(0, 1);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = 10; // Constant value
+            meta.parent2 = key2; // Cell reference with error
+            meta.formula = 13; // Addition with constant first operand
+        }
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error); // Propagates error
+    }
+
+    #[test]
+    fn test_reevaluate_formula_copy_value() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(42);
+
+        {
+            let key1 = sheet.get_key(0, 0);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = key1;
+            meta.parent2 = 0; // Not used
+            meta.formula = 82; // Copy value (8 is msb, 2 is remainder)
+        }
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(42)); // Just copies the value
+    }
+
+    #[test]
+    fn test_reevaluate_formula_sleep() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
+
+        {
+            let key1 = sheet.get_key(0, 0);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = key1;
+            meta.parent2 = 0; // Not used
+            meta.formula = 92; // Sleep function (9 is msb, 2 is remainder)
+        }
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3)); // Value copied
+        assert_eq!(sleep_time, 3.0); // Sleep value incremented
+    }
+
+    #[test]
+    fn test_reevaluate_formula_avg() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(2);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(4);
+        *sheet.get_mut_cell(0, 2) = CellValue::Integer(6);
+        *sheet.get_mut_cell(0, 3) = CellValue::Integer(8);
+
+        {
+            let start_key = sheet.get_key(0, 0);
+            let end_key = sheet.get_key(0, 3);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = start_key;
+            meta.parent2 = end_key;
+            meta.formula = 6; // AVG function (0 is msb, 6 is remainder)
+        }
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5)); // AVG of 2,4,6,8 = 5
+    }
+
+    #[test]
+    fn test_reevaluate_formula_min() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(1);
+        *sheet.get_mut_cell(0, 2) = CellValue::Integer(5);
+
+        {
+            let start_key = sheet.get_key(0, 0);
+            let end_key = sheet.get_key(0, 2);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = start_key;
+            meta.parent2 = end_key;
+            meta.formula = 7; // MIN function (0 is msb, 7 is remainder)
+        }
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(1)); // MIN of 3,1,5 = 1
+    }
+
+    #[test]
+    fn test_reevaluate_formula_max() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(3);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(9);
+        *sheet.get_mut_cell(0, 2) = CellValue::Integer(5);
+
+        {
+            let start_key = sheet.get_key(0, 0);
+            let end_key = sheet.get_key(0, 2);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = start_key;
+            meta.parent2 = end_key;
+            meta.formula = 8; // MAX function (0 is msb, 8 is remainder)
+        }
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(9)); // MAX of 3,9,5 = 9
+    }
+
+    #[test]
+    fn test_reevaluate_formula_variance() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(2);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(4);
+        *sheet.get_mut_cell(0, 2) = CellValue::Integer(6);
+
+        {
+            let start_key = sheet.get_key(0, 0);
+            let end_key = sheet.get_key(0, 2);
+            let meta = sheet.get_cell_meta(1, 1);
+            meta.parent1 = start_key;
+            meta.parent2 = end_key;
+            meta.formula = 9; // VARIANCE function (0 is msb, 9 is remainder)
+        }
+
+        let mut sleep_time = 0.0;
+        reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
+        // Variance of [2,4,6] = ((2-4)² + (4-4)² + (6-4)²) / 3 = (4 + 0 + 4) / 3 = 8/3 ≈ 2.67
+        // Integer truncation gives us 2
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(2));
+    }
     #[test]
     fn test_reevaluate_formula_arithmetic_div_zero() {
         let mut sheet = create_test_spreadsheet(5, 5);
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
         *sheet.get_mut_cell(0, 1) = CellValue::Integer(0);
         let key1 = sheet.get_key(0, 0);
-            let key2 = sheet.get_key(0, 1);
-            let meta = sheet.get_cell_meta(1, 1);
-            meta.parent1 = key1;
-            meta.parent2 = key2;
+        let key2 = sheet.get_key(0, 1);
+        let meta = sheet.get_cell_meta(1, 1);
+        meta.parent1 = key1;
+        meta.parent2 = key2;
         meta.formula = 30; // Division
         let mut sleep_time = 0.0;
         reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
@@ -690,10 +720,10 @@ fn test_reevaluate_formula_variance() {
         let mut sheet = create_test_spreadsheet(5, 5);
         *sheet.get_mut_cell(0, 0) = CellValue::Error;
         let key1 = sheet.get_key(0, 0);
-            let key2 = sheet.get_key(0, 1);
-            let meta = sheet.get_cell_meta(1, 1);
-            meta.parent1 = key1;
-            meta.parent2 = key2;
+        let key2 = sheet.get_key(0, 1);
+        let meta = sheet.get_cell_meta(1, 1);
+        meta.parent1 = key1;
+        meta.parent2 = key2;
         meta.formula = 10; // Addition
         let mut sleep_time = 0.0;
         reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
@@ -706,10 +736,10 @@ fn test_reevaluate_formula_variance() {
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
         *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);
         let key1 = sheet.get_key(0, 0);
-            let key2 = sheet.get_key(0, 1);
-            let meta = sheet.get_cell_meta(1, 1);
-            meta.parent1 = key1;
-            meta.parent2 = key2;
+        let key2 = sheet.get_key(0, 1);
+        let meta = sheet.get_cell_meta(1, 1);
+        meta.parent1 = key1;
+        meta.parent2 = key2;
         meta.formula = 5; // SUM
         let mut sleep_time = 0.0;
         reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
@@ -768,5 +798,4 @@ fn test_reevaluate_formula_variance() {
         reevaluate_formula(&mut sheet, 1, 1, &mut sleep_time);
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
     }
-    
 }

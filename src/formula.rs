@@ -1,8 +1,18 @@
 use crate::cell::{CellValue, parse_cell_reference};
 use crate::spreadsheet::{CommandStatus, Spreadsheet};
 
+/// Represents a range of cells in the spreadsheet.
+///
+/// Used for range-based operations like `SUM`, `AVG`, etc.
+///
+/// # Fields
+///
+/// * `start_row` - Starting row (zero-based).
+/// * `start_col` - Starting column (zero-based).
+/// * `end_row` - Ending row (zero-based).
+/// * `end_col` - Ending column (zero-based)
+
 #[derive(Debug, PartialEq, Clone)]
-// Range struct to represent a range of cells in the spreadsheet
 pub struct Range {
     pub start_row: i16,
     pub start_col: i16,
@@ -10,7 +20,20 @@ pub struct Range {
     pub end_col: i16,
 }
 
-// Optimize the sum_value function for large ranges
+/// Calculates the sum of a range and sets the cell value.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `parent1` - Key of the range’s start cell.
+/// * `parent2` - Key of the range’s end cell.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - Always, even if errors occur (sets `Error`)
+
 pub fn sum_value(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -39,7 +62,20 @@ pub fn sum_value(
     CommandStatus::CmdOk
 }
 
-// Add variance evaluation function
+/// Calculates the standard deviation of a range (integer part).
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `parent1` - Key of the range’s start cell.
+/// * `parent2` - Key of the range’s end cell.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - Always, even if errors occur (sets `Error`).
+
 pub fn eval_variance(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -78,6 +114,20 @@ pub fn eval_variance(
     CommandStatus::CmdOk
 }
 
+/// Finds the minimum value in a range.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `parent1` - Key of the range’s start cell.
+/// * `parent2` - Key of the range’s end cell.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - Always, even if errors occur (sets `Error`)
+
 pub fn eval_min(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -105,7 +155,20 @@ pub fn eval_min(
     CommandStatus::CmdOk
 }
 
-// Fix eval_max implementation
+/// Finds the maximum value in a range.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `parent1` - Key of the range’s start cell.
+/// * `parent2` - Key of the range’s end cell.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - Always, even if errors occur (sets `Error`)
+
 pub fn eval_max(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -133,7 +196,20 @@ pub fn eval_max(
     CommandStatus::CmdOk
 }
 
-// Fix eval_avg implementation
+/// Calculates the average of a range.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `parent1` - Key of the range’s start cell.
+/// * `parent2` - Key of the range’s end cell.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - Always, even if errors occur (sets `Error`)
+
 pub fn eval_avg(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -156,7 +232,18 @@ pub fn eval_avg(
     CommandStatus::CmdOk
 }
 
-// Keep the Range struct and parse_range function
+/// Parses a range string (e.g., "A1:B2") into a `Range`.
+///
+/// # Arguments
+///
+/// * `spreadsheet` - The spreadsheet for coordinate conversion.
+/// * `range_str` - The range string to parse.
+///
+/// # Returns
+///
+/// * `Ok(Range)` - The parsed range.
+/// * `Err(CommandStatus::CmdUnrecognized)` - If the range is invalid
+
 pub fn parse_range(spreadsheet: &Spreadsheet, range_str: &str) -> Result<Range, CommandStatus> {
     // Check for minimum valid range pattern length (like "A1:A1")
     if range_str.len() < 3 {
