@@ -660,7 +660,7 @@ pub fn handle_command(
             }
         }
     }
-    
+
     if trimmed.starts_with("unlock_cell ") {
         let unlock_target = trimmed.get(11..).unwrap_or("").trim();
         if unlock_target.contains(':') {
@@ -701,7 +701,7 @@ pub fn handle_command(
             Err(status) => return status,
         }
     }
-    
+
     if let Some(name_arg) = trimmed.strip_prefix("name ") {
         let parts: Vec<&str> = name_arg.split_whitespace().collect();
         if parts.len() == 2 {
@@ -1316,5 +1316,4 @@ mod tests {
         );
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
     }
-
 }

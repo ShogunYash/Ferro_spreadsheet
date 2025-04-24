@@ -183,7 +183,7 @@ fn handle_normal_mode_command(
             } else {
                 None
             };
-    
+
             if let Some(file) = filename {
                 state.save_file = Some(file.clone());
                 return save_spreadsheet(sheet, &file);
@@ -702,4 +702,3 @@ mod tests {
         assert!(!sheet.cell_meta.contains_key(&sheet.get_key(0, 0)));
     }
 }
-

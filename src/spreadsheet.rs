@@ -484,13 +484,11 @@ impl Spreadsheet {
     pub fn scroll_to_cell(&mut self, cell: &str) -> CommandStatus {
         match parse_cell_reference(self, cell) {
             Ok((row, col)) => {
-                    self.viewport_row = row;
-                    self.viewport_col = col;
-                    CommandStatus::CmdOk
+                self.viewport_row = row;
+                self.viewport_col = col;
+                CommandStatus::CmdOk
             }
-            Err(_) => {
-                CommandStatus::CmdUnrecognized
-            }
+            Err(_) => CommandStatus::CmdUnrecognized,
         }
     }
 
@@ -868,10 +866,9 @@ mod tests {
     fn test_cell_history_multiple_values() {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
         let key = sheet.get_key(0, 0);
-        sheet.cell_history.insert(key, vec![
-            CellValue::Integer(1),
-            CellValue::Integer(2),
-        ]);
+        sheet
+            .cell_history
+            .insert(key, vec![CellValue::Integer(1), CellValue::Integer(2)]);
         assert_eq!(sheet.cell_history[&key].len(), 2);
     }
 

@@ -56,7 +56,7 @@ pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
         return;
     }
 
-    let rem:i16 = meta.formula % 10;
+    let rem: i16 = meta.formula % 10;
 
     if (5..=9).contains(&rem) {
         // Use the optimized range_children removal for range operations
