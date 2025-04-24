@@ -979,7 +979,7 @@ mod tests {
         );
         assert_eq!(
             handle_command(&mut sheet, "visual Z9", &mut sleep_time),
-            CommandStatus::CmdInvalidCell
+            CommandStatus::CmdUnrecognized
         );
     }
 
