@@ -131,7 +131,7 @@ impl EditorState {
             || (self
                 .command_history
                 .last()
-                .map_or(false, |last| last == command))
+                .is_some_and(|last| last == command))
         {
             return;
         }
