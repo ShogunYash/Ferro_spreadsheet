@@ -138,8 +138,8 @@ fn main() {
             }
 
             // Add "open" command to load a spreadsheet
-            if trimmed.starts_with("open ") {
-                let filename = trimmed[5..].trim();
+            if let Some(filename_part) = trimmed.strip_prefix("open ") {
+                let filename = filename_part;
                 if !filename.is_empty() {
                     println!("Loading spreadsheet from '{}'...", filename);
                     match load_spreadsheet(&mut sheet, filename) {
