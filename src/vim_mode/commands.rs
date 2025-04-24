@@ -670,4 +670,39 @@ mod tests {
         let result = handle_vim_command(&mut sheet, "p", &mut state);
         assert_eq!(result, CommandStatus::CmdUnrecognized);
     }
+
+    #[test]
+    fn test_range_operation_sum() {
+        let (mut sheet, mut state) = setup();
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);
+        assert_eq!(
+            handle_vim_command(&mut sheet, "V (A1:B1) SUM", &mut state),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(state.command_answer, "SUM = 3");
+    }
+
+    #[test]
+    fn test_file_save_no_filename() {
+        let (mut sheet, mut state) = setup();
+        assert_eq!(
+            handle_vim_command(&mut sheet, ":w", &mut state),
+            CommandStatus::CmdUnrecognized
+        );
+    }
+
+    #[test]
+    fn test_cut_with_formula() {
+        let (mut sheet, mut state) = setup();
+        sheet.get_cell_meta(0, 0).formula = 10;
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(42);
+        assert_eq!(
+            handle_vim_command(&mut sheet, "d", &mut state),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
+        assert!(!sheet.cell_meta.contains_key(&sheet.get_key(0, 0)));
+    }
 }
+

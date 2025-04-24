@@ -95,3 +95,17 @@ pub fn run_editor(sheet: &mut Spreadsheet, filename: Option<String>) {
     // Save history before exiting
     let _ = rl.save_history("command_history.txt");
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::spreadsheet::Spreadsheet;
+
+//     #[test]
+//     fn test_run_editor_initialization() {
+//         let mut sheet = Spreadsheet::create(5, 5).unwrap();
+//         let filename = Some("test.sheet".to_string());
+//         run_editor(&mut sheet, filename.clone());
+//         // Test runs without panicking; full coverage requires mocking rustyline
+//     }
+// }

@@ -1107,4 +1107,235 @@ mod tests {
         );
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5));
     }
+
+    #[test]
+    fn test_resolve_cell_reference_named_range() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        sheet.named_ranges.insert(
+            "test".to_string(),
+            Range {
+                start_row: 1,
+                start_col: 1,
+                end_row: 1,
+                end_col: 1,
+            },
+        );
+        assert_eq!(resolve_cell_reference(&sheet, "test"), Ok((1, 1)));
+    }
+
+    #[test]
+    fn test_evaluate_arithmetic_both_cells() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(3);
+        assert_eq!(
+            evaluate_arithmetic(&mut sheet, 1, 1, "A1+B1"),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(8));
+    }
+
+    #[test]
+    fn test_evaluate_formula_avg() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(2);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(4);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "AVG(A1:B1)", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(3));
+    }
+
+    #[test]
+    fn test_evaluate_formula_stdev() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(2);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(4);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "STDEV(A1:B1)", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+    }
+
+    #[test]
+    fn test_set_cell_value_locked() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        sheet.lock_range(Range {
+            start_row: 0,
+            start_col: 0,
+            end_row: 0,
+            end_col: 0,
+        });
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            set_cell_value(&mut sheet, 0, 0, "42", &mut sleep_time),
+            CommandStatus::CmdLockedCell
+        );
+    }
+
+    #[test]
+    fn test_handle_command_highlight() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "HLP A1", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.highlight_type, HighlightType::Parent);
+        assert_eq!(
+            handle_command(&mut sheet, "HLOFF", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.highlight_type, HighlightType::None);
+    }
+
+    #[test]
+    fn test_evaluate_arithmetic_invalid_operator_position() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        assert_eq!(
+            evaluate_arithmetic(&mut sheet, 0, 0, "A1=+B1"),
+            CommandStatus::CmdUnrecognized
+        );
+    }
+
+    #[test]
+    fn test_evaluate_arithmetic_incomplete_expression() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        assert_eq!(
+            evaluate_arithmetic(&mut sheet, 0, 0, "A1/"),
+            CommandStatus::CmdUnrecognized
+        );
+    }
+
+    #[test]
+    fn test_evaluate_arithmetic_multiple_operands() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        assert_eq!(
+            evaluate_arithmetic(&mut sheet, 0, 0, "A1*B1*C1"),
+            CommandStatus::CmdUnrecognized
+        );
+    }
+
+    #[test]
+    fn test_evaluate_arithmetic_division_by_zero() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(0);
+        assert_eq!(
+            evaluate_arithmetic(&mut sheet, 1, 1, "A1/B1"),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
+    }
+
+    #[test]
+    fn test_set_cell_value_circular_ref_both_cells() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            set_cell_value(&mut sheet, 0, 0, "A1+B1", &mut sleep_time),
+            CommandStatus::CmdCircularRef
+        );
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
+    }
+
+    #[test]
+    fn test_evaluate_formula_avg_single_cell() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(10);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "AVG(A1:A1)", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(10));
+    }
+
+    #[test]
+    fn test_evaluate_formula_min_with_error() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(5);
+        *sheet.get_mut_cell(0, 1) = CellValue::Error;
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "MIN(A1:B1)", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
+    }
+
+    #[test]
+    fn test_evaluate_formula_max_negative_numbers() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(-5);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(-3);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "MAX(A1:B1)", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(-3));
+    }
+
+    #[test]
+    fn test_evaluate_formula_stdev_large_range() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(3);
+        *sheet.get_mut_cell(1, 0) = CellValue::Integer(5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 2, 2, "STDEV(A1:B2)", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+    }
+
+    #[test]
+    fn test_evaluate_formula_with_named_range() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        sheet.named_ranges.insert(
+            "data".to_string(),
+            Range {
+                start_row: 0,
+                start_col: 0,
+                end_row: 0,
+                end_col: 0,
+            },
+        );
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(15);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "SUM(data)", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(15));
+    }
+
+    // #[test]
+    // fn test_handle_command_highlight_parents() {
+    //     let mut sheet = create_test_spreadsheet(5, 5);
+    //     *sheet.get_mut_cell(0, 0) = CellValue::Integer(10);
+    //     let mut sleep_time = 0.0;
+    //     handle_command(&mut sheet, "B1=A1+5", &mut sleep_time);
+    //     assert_eq!(
+    //         handle_command(&mut sheet, "HLP B1", &mut sleep_time),
+    //         CommandStatus::CmdOk
+    //     );
+    //     assert_eq!(sheet.highlight_type, HighlightType::Parent);
+    //     assert_eq!(sheet.highlight_cell, sheet.get_key(1, 0));
+    // }
+
+    #[test]
+    fn test_handle_command_history_empty() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "history A1", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
+    }
+
 }
