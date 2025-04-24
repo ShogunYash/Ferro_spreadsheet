@@ -51,10 +51,7 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
             let cell_value = sheet.get_cell(row, col);
 
             // Only write cells with non-zero values or formulas
-            let is_nonzero = match cell_value {
-                CellValue::Integer(0) => false,
-                _ => true,
-            };
+            let is_nonzero = !matches!(cell_value, CellValue::Integer(0));
 
             // Check if cell has formula metadata
             let has_metadata = sheet.cell_meta.contains_key(&key);
@@ -109,7 +106,7 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
                 }
 
                 // End the line
-                if let Err(e) = writeln!(writer, "") {
+                if let Err(e) = writeln!(writer) {
                     eprintln!("Failed to write to '{}': {}", filename, e);
                     return CommandStatus::CmdUnrecognized;
                 }
@@ -265,11 +262,7 @@ pub fn load_spreadsheet(sheet: &mut Spreadsheet, filename: &str) -> CommandStatu
                                 };
 
                                 // Set cell metadata
-                                let key = sheet.get_key(row, col);
-                                let meta = sheet
-                                    .cell_meta
-                                    .entry(key)
-                                    .or_insert_with(|| crate::spreadsheet::CellMeta::new());
+                                let meta = sheet.get_cell_meta(row, col);
                                 meta.formula = formula;
                                 meta.parent1 = parent1_key;
                                 meta.parent2 = parent2_key;
