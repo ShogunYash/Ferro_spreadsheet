@@ -685,7 +685,7 @@ mod tests {
     #[test]
     fn test_scroll_to_cell_invalid() {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        assert_eq!(sheet.scroll_to_cell("F6"), CommandStatus::CmdInvalidCell);
+        assert_eq!(sheet.scroll_to_cell("F6"), CommandStatus::CmdUnrecognized);
         assert_eq!(sheet.scroll_to_cell("1A"), CommandStatus::CmdUnrecognized);
     }
 
@@ -761,18 +761,6 @@ mod tests {
         assert!(!highlighted);
         assert_eq!(htype, HighlightType::None);
     }
-
-    // #[test]
-    // fn test_is_highlighted_parent() {
-    //     let mut sheet = Spreadsheet::create(5, 5).unwrap();
-    //     let cell_key = sheet.get_key(1, 1);
-    //     let parent_key = sheet.get_key(0, 0);
-    //     sheet.get_cell_meta(1, 1).parent1 = parent_key;
-    //     sheet.set_highlight(1, 1, HighlightType::Parent);
-    //     let (highlighted, htype) = sheet.is_highlighted(parent_key);
-    //     assert!(highlighted);
-    //     assert_eq!(htype, HighlightType::Parent);
-    // }
 
     #[test]
     fn test_print_spreadsheet_with_highlights() {

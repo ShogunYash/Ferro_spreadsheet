@@ -85,7 +85,7 @@ pub fn parse_cell_reference(
     // Convert column name to index
     let col = sheet.column_name_to_index(col_name);
     // Check row and column bounds
-    if row < 0 || col < 0 || row > 998 || col > 18277 {
+    if row < 0 || col < 0 || row >= sheet.rows || col >= sheet.cols {
         return Err(CommandStatus::CmdUnrecognized);
     }
     Ok((row, col))
