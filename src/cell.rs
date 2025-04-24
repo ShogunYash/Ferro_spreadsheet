@@ -107,8 +107,14 @@ mod tests {
         let sheet = create_test_spreadsheet(10, 10);
         assert_eq!(parse_cell_reference(&sheet, "A1"), Ok((0, 0)));
         assert_eq!(parse_cell_reference(&sheet, "B2"), Ok((1, 1)));
-        assert_eq!(parse_cell_reference(&sheet, "AA10"), Err(CommandStatus::Unrecognized));
-        assert_eq!(parse_cell_reference(&sheet, "ZZZ999"), Err(CommandStatus::Unrecognized));
+        assert_eq!(
+            parse_cell_reference(&sheet, "AA10"),
+            Err(CommandStatus::Unrecognized)
+        );
+        assert_eq!(
+            parse_cell_reference(&sheet, "ZZZ999"),
+            Err(CommandStatus::Unrecognized)
+        );
     }
 
     #[test]

@@ -428,18 +428,9 @@ mod tests {
     #[test]
     fn test_parse_range_invalid() {
         let sheet = create_test_spreadsheet(5, 5);
-        assert_eq!(
-            parse_range(&sheet, "A"),
-            Err(CommandStatus::Unrecognized)
-        );
-        assert_eq!(
-            parse_range(&sheet, "A1:"),
-            Err(CommandStatus::Unrecognized)
-        );
-        assert_eq!(
-            parse_range(&sheet, ":A1"),
-            Err(CommandStatus::Unrecognized)
-        );
+        assert_eq!(parse_range(&sheet, "A"), Err(CommandStatus::Unrecognized));
+        assert_eq!(parse_range(&sheet, "A1:"), Err(CommandStatus::Unrecognized));
+        assert_eq!(parse_range(&sheet, ":A1"), Err(CommandStatus::Unrecognized));
         assert_eq!(
             parse_range(&sheet, "B2:A1"),
             Err(CommandStatus::Unrecognized)

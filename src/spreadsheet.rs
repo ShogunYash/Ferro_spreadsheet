@@ -907,9 +907,6 @@ mod tests {
     #[test]
     fn test_scroll_to_cell_out_of_bounds() {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        assert_eq!(
-            sheet.scroll_to_cell("A1000"),
-            CommandStatus::Unrecognized
-        );
+        assert_eq!(sheet.scroll_to_cell("A1000"), CommandStatus::Unrecognized);
     }
 }
