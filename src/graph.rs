@@ -10,7 +10,6 @@ use crate::spreadsheet::Spreadsheet;
 /// * `formula` - Formula code determining dependency type.
 /// * `row` - Child cell row.
 /// * `col` - Child cell column.
-
 pub fn add_children(
     sheet: &mut Spreadsheet,
     cell1: i32,
@@ -57,9 +56,9 @@ pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
         return;
     }
 
-    let rem: i16 = (meta.formula % 10) as i16;
+    let rem:i16 = meta.formula % 10;
 
-    if rem >= 5 && rem <= 9 {
+    if (5..=9).contains(&rem) {
         // Use the optimized range_children removal for range operations
         sheet.remove_range_child(child_key);
     } else if rem == 0 {
