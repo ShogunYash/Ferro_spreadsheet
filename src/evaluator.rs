@@ -1073,6 +1073,32 @@ mod tests {
     }
 
     #[test]
+    fn test_divide(){
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(10);
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "A1/B1", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(5));
+    }
+
+    #[test]
+    fn test_sleep_evaluator(){
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "SLEEP(A1)", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(1));
+        assert_eq!(sleep_time, 1.0);
+    }
+
+    #[test]
     fn test_resolve_cell_reference_named_range() {
         let mut sheet = create_test_spreadsheet(5, 5);
         sheet.named_ranges.insert(
@@ -1203,6 +1229,24 @@ mod tests {
             CommandStatus::CircularRef
         );
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
+    }
+
+    #[test]
+    fn test_lock_range(){
+        let mut sheet = create_test_spreadsheet(5, 5);
+        handle_command(&mut sheet, "lock_cell A1:B2", &mut 0.0);
+        assert!(sheet.is_cell_locked(0, 0));
+        handle_command(&mut sheet, "unlock_cell A1:B2", &mut 0.0);
+        assert!(!sheet.is_cell_locked(0, 0));
+    }
+
+    #[test]
+    fn test_lock_unlock(){
+        let mut sheet = create_test_spreadsheet(5, 5);
+        handle_command(&mut sheet, "lock_cell A1", &mut 0.0);
+        debug_assert_eq!(handle_command(&mut sheet, "is_locked A1", &mut 0.0),CommandStatus::LockedCell);
+        handle_command(&mut sheet, "unlock_cell A1", &mut 0.0);
+        assert!(!sheet.is_cell_locked(0, 0));
     }
 
     #[test]
