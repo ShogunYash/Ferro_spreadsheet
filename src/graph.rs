@@ -44,7 +44,6 @@ pub fn add_children(
 /// * `sheet` - The mutable spreadsheet.
 /// * `row` - The cell’s row.
 /// * `col` - The cell’s column
-
 pub fn remove_all_parents(sheet: &mut Spreadsheet, row: i16, col: i16) {
     // This removes the child row, col from its parent cells
     let child_key = sheet.get_key(row, col);

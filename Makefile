@@ -12,7 +12,8 @@ run: target/release/spreadsheet
 	./target/release/spreadsheet 999 18278
 
 vim: target/release/spreadsheet
-	./target/release/spreadsheet --vim 999 18278
+#	./target/release/spreadsheet --vim 999 18278
+	./target/release/spreadsheet --vim 999 18278 rust_spreadsheet.sheet
 # # Makefile for Ferro_spreadsheet
 
 # # Detect the environment

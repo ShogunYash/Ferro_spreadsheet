@@ -18,7 +18,6 @@ use crate::spreadsheet::{CommandStatus, HighlightType, Spreadsheet};
 ///
 /// * `Ok((row, col))` - The zero-based coordinates.
 /// * `Err(CommandStatus::CmdUnrecognized)` - If resolution fails
-
 fn resolve_cell_reference(sheet: &Spreadsheet, s: &str) -> Result<(i16, i16), CommandStatus> {
     if let Some(range) = sheet.named_ranges.get(s) {
         if range.start_row == range.end_row && range.start_col == range.end_col {
@@ -46,7 +45,6 @@ fn resolve_cell_reference(sheet: &Spreadsheet, s: &str) -> Result<(i16, i16), Co
 /// * `CommandStatus::CmdOk` - On success.
 /// * `CommandStatus::CmdCircularRef` - If self-referencing.
 /// * `CommandStatus::CmdUnrecognized` - If expression is invalid.
-
 pub fn handle_sleep(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -117,7 +115,6 @@ pub fn handle_sleep(
 ///
 /// * `CommandStatus::CmdOk` - On success.
 /// * `CommandStatus::CmdUnrecognized` - If expression is invalid.
-
 pub fn evaluate_arithmetic(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -348,7 +345,6 @@ pub fn evaluate_arithmetic(
 ///
 /// * `CommandStatus::CmdOk` - On success.
 /// * `CommandStatus::CmdUnrecognized` - If formula is invalid
-
 pub fn evaluate_formula(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -454,7 +450,6 @@ pub fn evaluate_formula(
 /// * `CommandStatus::CmdCircularRef` - If a cycle is detected.
 /// * `CommandStatus::CmdLockedCell` - If the cell is locked.
 /// * `CommandStatus::CmdUnrecognized` - If expression is invalid.
-
 pub fn set_cell_value(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -521,7 +516,6 @@ pub fn set_cell_value(
 ///
 /// * `CommandStatus::CmdOk` - On success.
 /// * `CommandStatus::CmdLockedCell` - If the cell is locked.
-
 fn set_cell_to_value(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -557,7 +551,6 @@ fn set_cell_to_value(
 /// # Returns
 ///
 /// The status of command execution (e.g., `CmdOk`, `CmdUnrecognized`)
-
 pub fn handle_command(
     sheet: &mut Spreadsheet,
     trimmed: &str,

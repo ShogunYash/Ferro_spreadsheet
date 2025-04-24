@@ -12,7 +12,6 @@ use std::collections::HashSet;
 /// * `col` - The target column.
 /// * `value` - The value to set.
 /// * `sleep_val` - Accumulates sleep time.
-
 pub fn sleep_fn(sheet: &mut Spreadsheet, row: i16, col: i16, value: i32, sleep_val: &mut f64) {
     *sheet.get_mut_cell(row, col) = CellValue::Integer(value);
     if value < 0 {
@@ -29,7 +28,6 @@ pub fn sleep_fn(sheet: &mut Spreadsheet, row: i16, col: i16, value: i32, sleep_v
 /// * `row` - The target row.
 /// * `col` - The target column.
 /// * `sleep_val` - Accumulates sleep time.
-
 pub fn reevaluate_formula(sheet: &mut Spreadsheet, row: i16, col: i16, sleep_val: &mut f64) {
     if sheet.is_cell_locked(row, col) {
         return;
@@ -165,7 +163,6 @@ pub fn reevaluate_formula(sheet: &mut Spreadsheet, row: i16, col: i16, sleep_val
 ///
 /// * `true` - If a cycle is detected.
 /// * `false` - If no cycle is detected.
-
 pub fn toposort_reval_detect_cycle(
     sheet: &mut Spreadsheet,
     row: i16,

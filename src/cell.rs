@@ -63,8 +63,8 @@ pub fn parse_cell_reference(
     }
 
     // Verify remaining chars are digits
-    for i in split_idx..cell_ref.len() {
-        if !cell_ref[i].is_ascii_digit() {
+    for &byte in &cell_ref[split_idx..] {
+        if !byte.is_ascii_digit() {
             return Err(CommandStatus::CmdUnrecognized);
         }
     }

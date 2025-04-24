@@ -125,7 +125,6 @@ impl EditorState {
     /// # Arguments
     ///
     /// * `command` - The command string to add.
-
     pub fn add_to_history(&mut self, command: &str) {
         // Don't add empty commands or duplicates of the most recent command
         if command.trim().is_empty()

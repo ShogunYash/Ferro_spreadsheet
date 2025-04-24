@@ -33,7 +33,6 @@ pub struct Range {
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - Always, even if errors occur (sets `Error`)
-
 pub fn sum_value(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -75,7 +74,6 @@ pub fn sum_value(
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - Always, even if errors occur (sets `Error`).
-
 pub fn eval_variance(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -127,7 +125,6 @@ pub fn eval_variance(
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - Always, even if errors occur (sets `Error`)
-
 pub fn eval_min(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -168,7 +165,6 @@ pub fn eval_min(
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - Always, even if errors occur (sets `Error`)
-
 pub fn eval_max(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -209,7 +205,6 @@ pub fn eval_max(
 /// # Returns
 ///
 /// * `CommandStatus::CmdOk` - Always, even if errors occur (sets `Error`)
-
 pub fn eval_avg(
     sheet: &mut Spreadsheet,
     row: i16,
@@ -243,7 +238,6 @@ pub fn eval_avg(
 ///
 /// * `Ok(Range)` - The parsed range.
 /// * `Err(CommandStatus::CmdUnrecognized)` - If the range is invalid
-
 pub fn parse_range(spreadsheet: &Spreadsheet, range_str: &str) -> Result<Range, CommandStatus> {
     // Check for minimum valid range pattern length (like "A1:A1")
     if range_str.len() < 3 {

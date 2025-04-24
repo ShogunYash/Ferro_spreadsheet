@@ -21,7 +21,6 @@ use crate::spreadsheet::{CommandStatus, Spreadsheet};
 /// # Returns
 ///
 /// The status of command execution.
-
 pub fn handle_vim_command(
     sheet: &mut Spreadsheet,
     input: &str,

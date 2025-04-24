@@ -33,7 +33,6 @@ const DEFAULT_FILENAME: &str = "rust_spreadsheet.sheet";
 /// # Arguments
 ///
 /// * Expects `rows` and `cols` as arguments, optionally preceded by `--vim`
-
 fn main() {
     let args: Vec<String> = env::args().collect();
     let mut vim_mode_enabled = false;
@@ -85,7 +84,7 @@ fn main() {
             if !Path::new(DEFAULT_FILENAME).exists() {
                 let _ = OpenOptions::new()
                     .write(true)
-                    .create(true)
+                    .truncate(true)
                     .open(DEFAULT_FILENAME);
             }
             Some(DEFAULT_FILENAME.to_string())

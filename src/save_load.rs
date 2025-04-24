@@ -18,7 +18,6 @@ use std::path::Path;
 ///
 /// * `CommandStatus::CmdOk` - On success.
 /// * `CommandStatus::CmdUnrecognized` - If file operations fail
-
 pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
     let path = Path::new(filename);
 
@@ -139,7 +138,6 @@ pub fn save_spreadsheet(sheet: &Spreadsheet, filename: &str) -> CommandStatus {
 ///
 /// * `CommandStatus::CmdOk` - On success (even with partial data).
 /// * `CommandStatus::CmdUnrecognized` - If the file cannot be opened
-
 pub fn load_spreadsheet(sheet: &mut Spreadsheet, filename: &str) -> CommandStatus {
     let path = Path::new(filename);
 

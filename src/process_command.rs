@@ -14,7 +14,6 @@ use std::time::{Duration, Instant};
 /// # Returns
 ///
 /// The status of command execution
-
 pub fn process_command(
     sheet: &mut Spreadsheet,
     command: &str,

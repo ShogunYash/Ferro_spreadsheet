@@ -11,7 +11,6 @@ use crate::spreadsheet::Spreadsheet;
 /// # Returns
 ///
 /// A string like "A1+B1" or "SUM(A1:B2)", or "No formula" if none
-
 pub fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
     let meta = sheet.get_cell_meta_ref(row, col);
     if meta.formula == -1 {

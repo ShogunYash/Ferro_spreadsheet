@@ -8,7 +8,6 @@ use std::collections::HashSet;
 // Constants
 const MAX_ROWS: i16 = 999; // Maximum number of rows in the spreadsheet   
 const MAX_COLS: i16 = 18278; // Maximum number of columns in the spreadsheet
-pub const MAX_DISPLAY: i16 = 15;
 
 /// Represents a highlighted relationship type for visualization.
 ///
@@ -110,10 +109,9 @@ impl CellMeta {
 /// * `highlight_cell` - Key of the highlighted cell.
 /// * `highlight_type` - Type of highlighting.
 /// * `display` - Number of rows/cols to display
-
 pub struct Spreadsheet {
     pub grid: Vec<CellValue>, // Vector of CellValues (contiguous in memory)
-    pub children: HashMap<i32, Box<HashSet<i32>>>, // Map from cell key to boxed HashSet of children
+    pub children: HashMap<i32, HashSet<i32>>, // Map from cell key to boxed HashSet of children
     pub range_children: Vec<RangeChild>, // Vector of range-based child relationships
     pub cell_meta: HashMap<i32, CellMeta>, // Map from cell key to metadata
     pub rows: i16,
@@ -127,7 +125,6 @@ pub struct Spreadsheet {
     pub last_edited: Option<(i16, i16)>,
     pub highlight_cell: i32,
     pub highlight_type: HighlightType,
-    pub display: i16,
 }
 
 impl Spreadsheet {
@@ -143,7 +140,7 @@ impl Spreadsheet {
     /// * `Some(Spreadsheet)` - If dimensions are valid.
     /// * `None` - If dimensions are invalid.
     pub fn create(rows: i16, cols: i16) -> Option<Spreadsheet> {
-        if rows < 1 || rows > MAX_ROWS || cols < 1 || cols > MAX_COLS {
+        if !(1..=MAX_ROWS).contains(&rows) || !(1..=MAX_COLS).contains(&cols) {
             eprintln!("Invalid spreadsheet dimensions");
             return None;
         }
@@ -168,7 +165,6 @@ impl Spreadsheet {
             last_edited: None,
             highlight_cell: -1,
             highlight_type: HighlightType::None,
-            display: 10,
         })
     }
 
@@ -288,7 +284,7 @@ impl Spreadsheet {
     pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
         self.children
             .entry(*parent_key)
-            .or_insert_with(|| Box::new(HashSet::with_capacity(5)))
+            .or_insert_with(|| HashSet::with_capacity(5))
             .insert(*child_key);
     }
 
@@ -306,7 +302,7 @@ impl Spreadsheet {
 
     // Get children for a cell (immutable) (modified for HashMap of boxed HashSets)
     pub fn get_cell_children(&self, key: i32) -> Option<&HashSet<i32>> {
-        self.children.get(&key).map(|boxed_set| boxed_set.as_ref())
+        self.children.get(&key)
     }
 
     pub fn set_highlight(&mut self, row: i16, col: i16, highlight_type: HighlightType) {
@@ -485,20 +481,15 @@ impl Spreadsheet {
     /// * `CommandStatus::CmdOk` - On success.
     /// * `CommandStatus::CmdInvalidCell` - If out of bounds.
     /// * `CommandStatus::CmdUnrecognized` - If parsing fails.
-
     pub fn scroll_to_cell(&mut self, cell: &str) -> CommandStatus {
         match parse_cell_reference(self, cell) {
             Ok((row, col)) => {
-                if row >= 0 && row < self.rows && col >= 0 && col < self.cols {
                     self.viewport_row = row;
                     self.viewport_col = col;
-                    return CommandStatus::CmdOk;
-                } else {
-                    return CommandStatus::CmdInvalidCell;
-                }
+                    CommandStatus::CmdOk
             }
             Err(_) => {
-                return CommandStatus::CmdUnrecognized;
+                CommandStatus::CmdUnrecognized
             }
         }
     }
