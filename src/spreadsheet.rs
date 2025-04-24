@@ -720,4 +720,212 @@ mod tests {
         sheet.output_enabled = true;
         sheet.print_spreadsheet(); // Should not panic
     }
+
+    #[test]
+    fn test_create_edge_cases() {
+        let sheet = Spreadsheet::create(1, 1).unwrap();
+        assert_eq!(sheet.grid.len(), 1);
+    }
+
+    #[test]
+    fn test_get_column_name_large_values() {
+        let sheet = Spreadsheet::create(1, MAX_COLS).unwrap();
+        assert_eq!(sheet.get_column_name(702), "AAA");
+        assert_eq!(sheet.get_column_name(18277), "ZZZ");
+    }
+
+    #[test]
+    fn test_add_range_child() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let start_key = sheet.get_key(0, 0);
+        let end_key = sheet.get_key(2, 2);
+        let child_key = sheet.get_key(3, 3);
+        sheet.add_range_child(start_key, end_key, child_key);
+        assert_eq!(sheet.range_children.len(), 1);
+        assert_eq!(sheet.range_children[0].child_key, child_key);
+    }
+
+    #[test]
+    fn test_remove_range_child() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let child_key = sheet.get_key(3, 3);
+        sheet.add_range_child(sheet.get_key(0, 0), sheet.get_key(2, 2), child_key);
+        sheet.remove_range_child(child_key);
+        assert!(sheet.range_children.is_empty());
+    }
+
+    #[test]
+    fn test_is_highlighted_no_highlight() {
+        let sheet = Spreadsheet::create(5, 5).unwrap();
+        let (highlighted, htype) = sheet.is_highlighted(sheet.get_key(0, 0));
+        assert!(!highlighted);
+        assert_eq!(htype, HighlightType::None);
+    }
+
+    // #[test]
+    // fn test_is_highlighted_parent() {
+    //     let mut sheet = Spreadsheet::create(5, 5).unwrap();
+    //     let cell_key = sheet.get_key(1, 1);
+    //     let parent_key = sheet.get_key(0, 0);
+    //     sheet.get_cell_meta(1, 1).parent1 = parent_key;
+    //     sheet.set_highlight(1, 1, HighlightType::Parent);
+    //     let (highlighted, htype) = sheet.is_highlighted(parent_key);
+    //     assert!(highlighted);
+    //     assert_eq!(htype, HighlightType::Parent);
+    // }
+
+    #[test]
+    fn test_print_spreadsheet_with_highlights() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        sheet.output_enabled = true;
+        sheet.set_highlight(0, 0, HighlightType::Parent);
+        sheet.print_spreadsheet_with_highlights(); // Should not panic
+    }
+
+    #[test]
+    fn test_lock_unlock_range() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let range = Range {
+            start_row: 1,
+            start_col: 1,
+            end_row: 2,
+            end_col: 2,
+        };
+        sheet.lock_range(range.clone());
+        assert!(sheet.is_cell_locked(1, 1));
+        sheet.unlock_range(range);
+        assert!(!sheet.is_cell_locked(1, 1));
+    }
+
+    #[test]
+    fn test_named_ranges() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let range = Range {
+            start_row: 0,
+            start_col: 0,
+            end_row: 0,
+            end_col: 0,
+        };
+        sheet.named_ranges.insert("test".to_string(), range);
+        assert_eq!(sheet.get_cell_name(0, 0), "test");
+    }
+
+    #[test]
+    fn test_scroll_viewport_top_left_bounds() {
+        let mut sheet = Spreadsheet::create(50, 50).unwrap();
+        sheet.viewport_row = 5;
+        sheet.viewport_col = 5;
+        sheet.scroll_viewport('w');
+        assert_eq!(sheet.viewport_row, 0);
+        sheet.scroll_viewport('a');
+        assert_eq!(sheet.viewport_col, 0);
+    }
+
+    #[test]
+    fn test_scroll_viewport_bottom_right_bounds() {
+        let mut sheet = Spreadsheet::create(50, 50).unwrap();
+        sheet.scroll_viewport('s');
+        sheet.scroll_viewport('s');
+        sheet.scroll_viewport('s');
+        assert_eq!(sheet.viewport_row, 30); // 50 - VIEWPORT_SIZE
+        sheet.scroll_viewport('d');
+        sheet.scroll_viewport('d');
+        sheet.scroll_viewport('d');
+        assert_eq!(sheet.viewport_col, 30);
+    }
+
+    #[test]
+    fn test_lock_multiple_ranges() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let range1 = Range {
+            start_row: 0,
+            start_col: 0,
+            end_row: 1,
+            end_col: 1,
+        };
+        let range2 = Range {
+            start_row: 2,
+            start_col: 2,
+            end_row: 3,
+            end_col: 3,
+        };
+        sheet.lock_range(range1);
+        sheet.lock_range(range2);
+        assert!(sheet.is_cell_locked(0, 0));
+        assert!(sheet.is_cell_locked(2, 2));
+        assert!(!sheet.is_cell_locked(4, 4));
+    }
+
+    #[test]
+    fn test_named_ranges_overlap() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let range1 = Range {
+            start_row: 0,
+            start_col: 0,
+            end_row: 0,
+            end_col: 0,
+        };
+        let range2 = Range {
+            start_row: 0,
+            start_col: 0,
+            end_row: 1,
+            end_col: 1,
+        };
+        sheet.named_ranges.insert("start".to_string(), range1);
+        sheet.named_ranges.insert("area".to_string(), range2);
+        assert_eq!(sheet.get_cell_name(0, 0), "start"); // First match wins
+    }
+
+    #[test]
+    fn test_cell_history_multiple_values() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let key = sheet.get_key(0, 0);
+        sheet.cell_history.insert(key, vec![
+            CellValue::Integer(1),
+            CellValue::Integer(2),
+        ]);
+        assert_eq!(sheet.cell_history[&key].len(), 2);
+    }
+
+    #[test]
+    fn test_is_highlighted_parent() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let cell_key = sheet.get_key(1, 1);
+        let parent_key = sheet.get_key(0, 0);
+        let meta = sheet.get_cell_meta(1, 1);
+        meta.parent1 = parent_key;
+        meta.formula = 2;
+        sheet.set_highlight(1, 1, HighlightType::Parent);
+        let (highlighted, htype) = sheet.is_highlighted(parent_key);
+        assert!(highlighted);
+        assert_eq!(htype, HighlightType::Parent);
+    }
+
+    #[test]
+    fn test_is_highlighted_child_range() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        let cell_key = sheet.get_key(0, 0);
+        let child_key = sheet.get_key(1, 1);
+        sheet.add_range_child(cell_key, cell_key, child_key);
+        sheet.set_highlight(0, 0, HighlightType::Child);
+        let (highlighted, htype) = sheet.is_highlighted(child_key);
+        assert!(highlighted);
+        assert_eq!(htype, HighlightType::Child);
+    }
+
+    #[test]
+    fn test_create_max_dimensions() {
+        let sheet = Spreadsheet::create(MAX_ROWS, MAX_COLS).unwrap();
+        assert_eq!(sheet.rows, MAX_ROWS);
+        assert_eq!(sheet.cols, MAX_COLS);
+    }
+
+    #[test]
+    fn test_scroll_to_cell_out_of_bounds() {
+        let mut sheet = Spreadsheet::create(5, 5).unwrap();
+        assert_eq!(
+            sheet.scroll_to_cell("A1000"),
+            CommandStatus::CmdUnrecognized
+        );
+    }
 }
