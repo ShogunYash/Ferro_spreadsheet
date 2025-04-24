@@ -1322,6 +1322,20 @@ mod tests {
     }
 
     #[test]
+    fn test_name_handle(){
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "name A1:B2 test", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(sheet.named_ranges.get("test").unwrap().start_row, 0);
+        assert_eq!(sheet.named_ranges.get("test").unwrap().end_row, 1);
+        assert_eq!(sheet.named_ranges.get("test").unwrap().start_col, 0);
+        assert_eq!(sheet.named_ranges.get("test").unwrap().end_col, 1);
+    }
+
+    #[test]
     fn test_sleep_error() {
         let mut sheet = create_test_spreadsheet(5, 5);
         *sheet.get_mut_cell(0, 0) = CellValue::Error;
@@ -1340,6 +1354,44 @@ mod tests {
             0,
             0,
             "ZZZ999",),CommandStatus::Unrecognized);
+    }
+
+    #[test]
+    fn test_formula(){
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "formula A1", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+    }
+
+    #[test]
+    fn test_hlp_hlpc(){
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "HLP A1", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(
+            handle_command(&mut sheet, "HLPC A1", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+    }
+
+    #[test]
+    fn test_name(){
+        let mut sheet = create_test_spreadsheet(5, 5);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_command(&mut sheet, "name A1 cop", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(
+            handle_command(&mut sheet, "name A1 cop290", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
     }
 
     #[test]
