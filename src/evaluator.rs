@@ -180,10 +180,10 @@ pub fn evaluate_arithmetic(
     let mut op = 0u8;
 
     // Start at index 1 to handle leading minus sign
-    for i in 1..bytes.len() {
-        match bytes[i] {
+    for (i, &byte) in bytes.iter().enumerate().skip(1) {
+        match byte {
             b'+' | b'-' | b'*' | b'/' => {
-                op = bytes[i];
+                op = byte;
                 op_idx = i;
                 break;
             }
@@ -494,7 +494,7 @@ pub fn set_cell_value(
             sheet
                 .cell_history
                 .entry(cell_key)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(old_value);
             sheet.set_last_edited(row, col);
         }
@@ -587,30 +587,6 @@ pub fn handle_command(
         _ => {}
     }
 
-    // Check for cell dependency visualization command
-    if trimmed.starts_with("visual ") {
-        let cell_ref = &trimmed[7..]; // Skip "visualize " prefix
-        match parse_cell_reference(sheet, cell_ref) {
-            Ok((row, col)) => {
-                return sheet.visualize_cell_relationships(row, col);
-            }
-            Err(status) => {
-                return status;
-            }
-        }
-    }
-
-    // if trimmed.starts_with("display ") {
-    //     let num_str = trimmed.get(8..).unwrap_or("").trim();
-    //     match num_str.parse::<i16>() {
-    //         Ok(num) if num > 0 && num <= MAX_DISPLAY => {
-    //             sheet.display = num;
-    //             return CommandStatus::CmdOk;
-    //         }
-    //         _ => return CommandStatus::CmdUnrecognized,
-    //     }
-    // }
-
     // Check for scroll_to command with byte-based comparison
     if trimmed.len() > 10
         && &trimmed.as_bytes()[..9] == b"scroll_to"
@@ -618,6 +594,32 @@ pub fn handle_command(
     {
         let cell_ref = &trimmed[10..];
         return sheet.scroll_to_cell(cell_ref);
+    }
+
+    // Check for cell assignment using byte search for '='
+    let bytes = trimmed.as_bytes();
+    let mut eq_pos = None;
+
+    for (i, &b) in bytes.iter().enumerate() {
+        if b == b'=' {
+            eq_pos = Some(i);
+            break;
+        }
+    }
+
+    if let Some(pos) = eq_pos {
+        // Use slice operations which are more efficient than split_at
+        let cell_ref = trimmed[..pos].trim();
+        let expr = trimmed[pos + 1..].trim();
+
+        // Parse the cell reference with direct result handling
+        return match parse_cell_reference(sheet, cell_ref) {
+            Ok((row, col)) => {
+                // All bounds checks in one condition
+                set_cell_value(sheet, row, col, expr, sleep_time)
+            }
+            Err(status) => status,
+        };
     }
 
     if trimmed.starts_with("lock_cell ") {
@@ -647,6 +649,18 @@ pub fn handle_command(
         }
     }
 
+    // Check for cell dependency visualization command
+    if let Some(cell_ref) = trimmed.strip_prefix("visual ") {
+        match parse_cell_reference(sheet, cell_ref) {
+            Ok((row, col)) => {
+                return sheet.visualize_cell_relationships(row, col);
+            }
+            Err(status) => {
+                return status;
+            }
+        }
+    }
+    
     if trimmed.starts_with("unlock_cell ") {
         let unlock_target = trimmed.get(11..).unwrap_or("").trim();
         if unlock_target.contains(':') {
@@ -674,8 +688,8 @@ pub fn handle_command(
         }
     }
 
-    if trimmed.starts_with("is_locked ") {
-        let cell_ref: &str = trimmed.get(10..).unwrap_or("").trim();
+    if let Some(cell_ref) = trimmed.strip_prefix("is_locked ") {
+        let cell_ref = cell_ref.trim();
         match resolve_cell_reference(sheet, cell_ref) {
             Ok((row, col)) => {
                 if sheet.is_cell_locked(row, col) {
@@ -687,9 +701,9 @@ pub fn handle_command(
             Err(status) => return status,
         }
     }
-
-    if trimmed.starts_with("name ") {
-        let parts: Vec<&str> = trimmed[5..].split_whitespace().collect();
+    
+    if let Some(name_arg) = trimmed.strip_prefix("name ") {
+        let parts: Vec<&str> = name_arg.split_whitespace().collect();
         if parts.len() == 2 {
             let target = parts[0];
             let name = parts[1];
@@ -710,8 +724,8 @@ pub fn handle_command(
         return CommandStatus::CmdUnrecognized;
     }
 
-    if trimmed.starts_with("history ") {
-        let cell_ref = trimmed[8..].trim();
+    if let Some(stripped) = trimmed.strip_prefix("history ") {
+        let cell_ref = stripped.trim();
         return match resolve_cell_reference(sheet, cell_ref) {
             Ok((row, col)) => {
                 let cell_key = sheet.get_key(row, col);
@@ -729,8 +743,8 @@ pub fn handle_command(
         };
     }
 
-    if trimmed.starts_with("formula ") {
-        let cell_ref = trimmed[8..].trim();
+    if let Some(stripped) = trimmed.strip_prefix("formula ") {
+        let cell_ref = stripped.trim();
         match resolve_cell_reference(sheet, cell_ref) {
             Ok((row, col)) => {
                 let formula_str = get_formula_string(sheet, row, col);
@@ -742,8 +756,7 @@ pub fn handle_command(
     }
 
     // Check for highlight commands
-    if trimmed.starts_with("HLP ") {
-        let cell_ref = &trimmed[4..];
+    if let Some(cell_ref) = trimmed.strip_prefix("HLP ") {
         if let Ok((row, col)) = parse_cell_reference(sheet, cell_ref) {
             sheet.set_highlight(row, col, HighlightType::Parent);
             return CommandStatus::CmdOk;
@@ -752,8 +765,7 @@ pub fn handle_command(
         }
     }
 
-    if trimmed.starts_with("HLC ") {
-        let cell_ref = &trimmed[4..];
+    if let Some(cell_ref) = trimmed.strip_prefix("HLC ") {
         if let Ok((row, col)) = parse_cell_reference(sheet, cell_ref) {
             sheet.set_highlight(row, col, HighlightType::Child);
             return CommandStatus::CmdOk;
@@ -762,8 +774,7 @@ pub fn handle_command(
         }
     }
 
-    if trimmed.starts_with("HLPC ") {
-        let cell_ref = &trimmed[5..];
+    if let Some(cell_ref) = trimmed.strip_prefix("HLPC ") {
         if let Ok((row, col)) = parse_cell_reference(sheet, cell_ref) {
             sheet.set_highlight(row, col, HighlightType::Both);
             return CommandStatus::CmdOk;
@@ -777,31 +788,6 @@ pub fn handle_command(
         return CommandStatus::CmdOk;
     }
 
-    // Check for cell assignment using byte search for '='
-    let bytes = trimmed.as_bytes();
-    let mut eq_pos = None;
-
-    for (i, &b) in bytes.iter().enumerate() {
-        if b == b'=' {
-            eq_pos = Some(i);
-            break;
-        }
-    }
-
-    if let Some(pos) = eq_pos {
-        // Use slice operations which are more efficient than split_at
-        let cell_ref = trimmed[..pos].trim();
-        let expr = trimmed[pos + 1..].trim();
-
-        // Parse the cell reference with direct result handling
-        return match parse_cell_reference(sheet, cell_ref) {
-            Ok((row, col)) => {
-                // All bounds checks in one condition
-                set_cell_value(sheet, row, col, expr, sleep_time)
-            }
-            Err(status) => status,
-        };
-    }
     // No recognized command
     CommandStatus::CmdUnrecognized
 }
