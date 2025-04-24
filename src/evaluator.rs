@@ -162,10 +162,7 @@ pub fn evaluate_arithmetic(
                 add_children(sheet, ref_cell_key, -1, 82, row, col);
 
                 // Update cell value
-                *sheet.get_mut_cell(row, col) = match sheet.get_cell(target_row, target_col) {
-                    CellValue::Integer(val) => CellValue::Integer(*val),
-                    _ => CellValue::Error,
-                };
+                *sheet.get_mut_cell(row, col) = sheet.get_cell(target_row, target_col).clone();
 
                 return CommandStatus::CmdOk;
             }
@@ -1031,18 +1028,6 @@ mod tests {
         assert_eq!(sheet.viewport_col, 1);
     }
 
-    // #[test]
-    // fn test_handle_command_display() {
-    //     let mut sheet = create_test_spreadsheet(20, 20);
-    //     let mut sleep_time = 0.0;
-    //     assert_eq!(
-    //         handle_command(&mut sheet, "display 5", &mut sleep_time),
-    //         CommandStatus::CmdOk
-    //     );
-    //     assert_eq!(sheet.display_rows, 5);
-    //     assert_eq!(sheet.display_cols, 5);
-    // }
-
     #[test]
     fn test_handle_command_lock_cell() {
         let mut sheet = create_test_spreadsheet(5, 5);
@@ -1292,19 +1277,51 @@ mod tests {
         assert_eq!(*sheet.get_cell(1, 1), CellValue::Integer(15));
     }
 
-    // #[test]
-    // fn test_handle_command_highlight_parents() {
-    //     let mut sheet = create_test_spreadsheet(5, 5);
-    //     *sheet.get_mut_cell(0, 0) = CellValue::Integer(10);
-    //     let mut sleep_time = 0.0;
-    //     handle_command(&mut sheet, "B1=A1+5", &mut sleep_time);
-    //     assert_eq!(
-    //         handle_command(&mut sheet, "HLP B1", &mut sleep_time),
-    //         CommandStatus::CmdOk
-    //     );
-    //     assert_eq!(sheet.highlight_type, HighlightType::Parent);
-    //     assert_eq!(sheet.highlight_cell, sheet.get_key(1, 0));
-    // }
+    #[test]
+    fn test_sleep_error() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Error;
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            handle_sleep(&mut sheet, 1, 1, "A1", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+    }
+
+    #[test]
+    fn test_wrong_cell_reference() {
+        let mut sheet = create_test_spreadsheet(5, 5);
+        assert_eq!(evaluate_arithmetic(
+            &mut sheet,
+            0,
+            0,
+            "ZZZ999",),CommandStatus::Unrecognized);
+    }
+
+    #[test]
+    fn left_and_right_val(){
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 1) = CellValue::Error;
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "4+B1", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
+    }
+
+    #[test]
+    fn left_error_right_cell(){
+        let mut sheet = create_test_spreadsheet(5, 5);
+        *sheet.get_mut_cell(0, 0) = CellValue::Error;
+        *sheet.get_mut_cell(0, 1) = CellValue::Integer(1);
+        let mut sleep_time = 0.0;
+        assert_eq!(
+            evaluate_formula(&mut sheet, 1, 1, "A1+B1", &mut sleep_time),
+            CommandStatus::CmdOk
+        );
+        assert_eq!(*sheet.get_cell(1, 1), CellValue::Error);
+    }
 
     #[test]
     fn test_handle_command_history_empty() {
@@ -1316,4 +1333,5 @@ mod tests {
         );
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
     }
+
 }
