@@ -171,10 +171,9 @@ fn handle_normal_mode_command(
         }
         return CommandStatus::CmdUnrecognized;
     }
+    
     // File commands
-    if input.starts_with(':') {
-        let cmd = &input[1..];
-
+    if let Some(cmd) = input.strip_prefix(':') {
         // :w - write file
         if cmd.starts_with('w') && !cmd.starts_with("wq") {
             // Extract filename if provided
@@ -185,7 +184,7 @@ fn handle_normal_mode_command(
             } else {
                 None
             };
-
+    
             if let Some(file) = filename {
                 state.save_file = Some(file.clone());
                 return save_spreadsheet(sheet, &file);
@@ -329,7 +328,7 @@ fn yank_cell(sheet: &mut Spreadsheet, state: &mut EditorState) -> CommandStatus 
         // Get the formula string from the cell metadata
         let formula_string =
             crate::extensions::get_formula_string(sheet, state.cursor_row, state.cursor_col);
-        format!("{}", formula_string)
+        formula_string.to_string()
     } else {
         String::new()
     };
