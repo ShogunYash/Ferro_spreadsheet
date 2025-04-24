@@ -875,7 +875,6 @@ mod tests {
     #[test]
     fn test_is_highlighted_parent() {
         let mut sheet = Spreadsheet::create(5, 5).unwrap();
-        let cell_key = sheet.get_key(1, 1);
         let parent_key = sheet.get_key(0, 0);
         let meta = sheet.get_cell_meta(1, 1);
         meta.parent1 = parent_key;

@@ -253,7 +253,6 @@ mod tests {
     #[test]
     fn test_visualize_cell_with_parents() {
         let mut sheet = create_test_spreadsheet(5, 5);
-        let cell_key = sheet.get_key(1, 1);
         sheet.get_cell_meta(1, 1).parent1 = sheet.get_key(0, 0);
         assert_eq!(
             visualize_cell_relationships(&sheet, 1, 1),
@@ -288,7 +287,6 @@ mod tests {
     #[test]
     fn test_visualize_cell_with_multiple_parents() {
         let mut sheet = create_test_spreadsheet(5, 5);
-        let cell_key = sheet.get_key(1, 1);
         sheet.get_cell_meta(1, 1).parent1 = sheet.get_key(0, 0);
         sheet.get_cell_meta(1, 1).parent2 = sheet.get_key(0, 1);
         assert_eq!(
@@ -339,7 +337,6 @@ mod tests {
     #[test]
     fn test_visualize_cell_with_large_integer() {
         let mut sheet = create_test_spreadsheet(5, 5);
-        let cell_key = sheet.get_key(0, 0);
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(1_000_000);
         assert_eq!(
             visualize_cell_relationships(&sheet, 0, 0),
