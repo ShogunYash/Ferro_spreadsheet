@@ -78,20 +78,49 @@ pub fn visualize_cell_relationships(
 
     // Process immediate parents (one level up)
     if let Some(meta) = spreadsheet.cell_meta.get(&cell_key) {
-        for parent_key in [meta.parent1, meta.parent2].iter().filter(|&&k| k >= 0) {
-            // Create parent node if it doesn't exist
-            let parent_idx = if let Some(&idx) = node_indices.get(parent_key) {
-                idx
-            } else {
-                let parent_label = get_cell_label(*parent_key);
-                let idx = graph.add_node(parent_label);
-                node_indices.insert(*parent_key, idx);
-                idx
-            };
+        // Check if this is a range-based formula (formula types 5-9)
+        if (5..=9).contains(&meta.formula) {
+            // For range formulas, parent1 is the start cell key and parent2 is the end cell key
+            let start_key = meta.parent1;
+            let end_key = meta.parent2;
+            
+            if start_key >= 0 && end_key >= 0 {
+                // Get the row and column for range display
+                let (start_r, start_c) = spreadsheet.get_row_col(start_key);
+                let (end_r, end_c) = spreadsheet.get_row_col(end_key);
+                
+                // Create a special range node to represent the range
+                let range_name = format!(
+                    "Range {}{}:{}{}",
+                    spreadsheet.get_column_name(start_c),
+                    start_r + 1,
+                    spreadsheet.get_column_name(end_c),
+                    end_r + 1
+                );
+                
+                let range_node = graph.add_node(range_name);
+                
+                // Add edge from range to the target cell
+                graph.add_edge(range_node, target_node, "provides data to");
+                
+            }
+        } else {
+            // For normal formula types, handle individual parents
+            for parent_key in [meta.parent1, meta.parent2].iter().filter(|&&k| k >= 0) {
+                // Create parent node if it doesn't exist
+                let parent_idx = if let Some(&idx) = node_indices.get(parent_key) {
+                    idx
+                } else {
+                    let parent_label = get_cell_label(*parent_key);
+                    let idx = graph.add_node(parent_label);
+                    node_indices.insert(*parent_key, idx);
+                    idx
+                };
 
-            // Add edge from parent to child
-            let child_idx = node_indices[&cell_key];
-            graph.add_edge(parent_idx, child_idx, "depends on");
+                // Add edge from parent to child
+                let child_idx = node_indices[&cell_key];
+                graph.add_edge(parent_idx, child_idx, "depends on");
+            }
         }
     }
 
@@ -178,20 +207,52 @@ pub fn visualize_cell_relationships(
     println!("  Parents:");
     let mut has_parents = false;
 
-    // Direct parent cells
+    // Check for range-based or direct parents
     if let Some(meta) = spreadsheet.cell_meta.get(&cell_key) {
-        for parent_key in [meta.parent1, meta.parent2].iter().filter(|&&k| k >= 0) {
+        if (5..=9).contains(&meta.formula) {
+            // Range-based parents
             has_parents = true;
-            let (r, c) = spreadsheet.get_row_col(*parent_key);
-            println!(
-                "    - {}{}: {}",
-                spreadsheet.get_column_name(c),
-                r + 1,
-                match spreadsheet.grid[*parent_key as usize] {
-                    CellValue::Integer(val) => val.to_string(),
-                    CellValue::Error => "ERROR".to_string(),
-                }
-            );
+            let start_key = meta.parent1;
+            let end_key = meta.parent2;
+            
+            if start_key >= 0 && end_key >= 0 {
+                let (start_r, start_c) = spreadsheet.get_row_col(start_key);
+                let (end_r, end_c) = spreadsheet.get_row_col(end_key);
+                
+                // Determine the function type
+                let function_name = match meta.formula {
+                    5 => "SUM",
+                    6 => "AVG",
+                    7 => "MIN",
+                    8 => "MAX",
+                    9 => "STDEV",
+                    _ => "UNKNOWN",
+                };
+                
+                println!(
+                    "    - Range function: {} on range {}{}:{}{}",
+                    function_name,
+                    spreadsheet.get_column_name(start_c),
+                    start_r + 1,
+                    spreadsheet.get_column_name(end_c),
+                    end_r + 1
+                );
+            }
+        } else {
+            // Direct parent cells
+            for parent_key in [meta.parent1, meta.parent2].iter().filter(|&&k| k >= 0) {
+                has_parents = true;
+                let (r, c) = spreadsheet.get_row_col(*parent_key);
+                println!(
+                    "    - {}{}: {}",
+                    spreadsheet.get_column_name(c),
+                    r + 1,
+                    match spreadsheet.grid[*parent_key as usize] {
+                        CellValue::Integer(val) => val.to_string(),
+                        CellValue::Error => "ERROR".to_string(),
+                    }
+                );
+            }
         }
     }
 
