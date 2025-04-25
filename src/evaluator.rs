@@ -1073,7 +1073,7 @@ mod tests {
     }
 
     #[test]
-    fn test_divide(){
+    fn test_divide() {
         let mut sheet = create_test_spreadsheet(5, 5);
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(10);
         *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);
@@ -1086,7 +1086,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sleep_evaluator(){
+    fn test_sleep_evaluator() {
         let mut sheet = create_test_spreadsheet(5, 5);
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
         let mut sleep_time = 0.0;
@@ -1232,7 +1232,7 @@ mod tests {
     }
 
     #[test]
-    fn test_lock_range(){
+    fn test_lock_range() {
         let mut sheet = create_test_spreadsheet(5, 5);
         handle_command(&mut sheet, "lock_cell A1:B2", &mut 0.0);
         assert!(sheet.is_cell_locked(0, 0));
@@ -1241,10 +1241,13 @@ mod tests {
     }
 
     #[test]
-    fn test_lock_unlock(){
+    fn test_lock_unlock() {
         let mut sheet = create_test_spreadsheet(5, 5);
         handle_command(&mut sheet, "lock_cell A1", &mut 0.0);
-        debug_assert_eq!(handle_command(&mut sheet, "is_locked A1", &mut 0.0),CommandStatus::LockedCell);
+        debug_assert_eq!(
+            handle_command(&mut sheet, "is_locked A1", &mut 0.0),
+            CommandStatus::LockedCell
+        );
         handle_command(&mut sheet, "unlock_cell A1", &mut 0.0);
         assert!(!sheet.is_cell_locked(0, 0));
     }
@@ -1322,7 +1325,7 @@ mod tests {
     }
 
     #[test]
-    fn test_name_handle(){
+    fn test_name_handle() {
         let mut sheet = create_test_spreadsheet(5, 5);
         let mut sleep_time = 0.0;
         assert_eq!(
@@ -1349,15 +1352,14 @@ mod tests {
     #[test]
     fn test_wrong_cell_reference() {
         let mut sheet = create_test_spreadsheet(5, 5);
-        assert_eq!(evaluate_arithmetic(
-            &mut sheet,
-            0,
-            0,
-            "ZZZ999",),CommandStatus::Unrecognized);
+        assert_eq!(
+            evaluate_arithmetic(&mut sheet, 0, 0, "ZZZ999",),
+            CommandStatus::Unrecognized
+        );
     }
 
     #[test]
-    fn test_formula(){
+    fn test_formula() {
         let mut sheet = create_test_spreadsheet(5, 5);
         let mut sleep_time = 0.0;
         assert_eq!(
@@ -1367,7 +1369,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hlp_hlpc(){
+    fn test_hlp_hlpc() {
         let mut sheet = create_test_spreadsheet(5, 5);
         let mut sleep_time = 0.0;
         assert_eq!(
@@ -1381,7 +1383,7 @@ mod tests {
     }
 
     #[test]
-    fn test_name(){
+    fn test_name() {
         let mut sheet = create_test_spreadsheet(5, 5);
         let mut sleep_time = 0.0;
         assert_eq!(
@@ -1395,7 +1397,7 @@ mod tests {
     }
 
     #[test]
-    fn left_and_right_val(){
+    fn left_and_right_val() {
         let mut sheet = create_test_spreadsheet(5, 5);
         *sheet.get_mut_cell(0, 1) = CellValue::Error;
         let mut sleep_time = 0.0;
@@ -1407,7 +1409,7 @@ mod tests {
     }
 
     #[test]
-    fn left_error_right_cell(){
+    fn left_error_right_cell() {
         let mut sheet = create_test_spreadsheet(5, 5);
         *sheet.get_mut_cell(0, 0) = CellValue::Error;
         *sheet.get_mut_cell(0, 1) = CellValue::Integer(1);
@@ -1429,5 +1431,4 @@ mod tests {
         );
         assert_eq!(*sheet.get_cell(0, 0), CellValue::Integer(0));
     }
-
 }
