@@ -164,7 +164,12 @@ cargo run --release -- 999 18278
 - Pressing upper arrow goes to previous command
 - Pressing down arrow goes to more recent command
 #### Extension to normal spreadsheet 
-- 
+- `history <cell>` to revert back to previous value of the cell
+- `lock_cell <cell/range>` to disable editing value of the cell or range of cells
+- `last_edit` makes the last edited cell the top left cell 
+- `name <cell/range> <name>` to name a cell or range of cells and use the name later 
+- `unlock_cell <cell>` to enable editing the value of disabled cell
+- `is_locked <cell>` to check if the cell is locked
 
 ## Testing Approach
 
