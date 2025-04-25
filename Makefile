@@ -42,9 +42,6 @@ docs:
 	cargo doc --no-deps
 	pdflatex report.tex
 
-report:
-	pdflatex report.tex
-
 # Code coverage targets
 coverage:
 	cargo tarpaulin --ignore-tests --out Html --include-files 'src/*'
