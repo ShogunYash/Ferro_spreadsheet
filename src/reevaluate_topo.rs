@@ -29,6 +29,7 @@ pub fn sleep_fn(sheet: &mut Spreadsheet, row: i16, col: i16, value: i32, sleep_v
 /// * `col` - The target column.
 /// * `sleep_val` - Accumulates sleep time.
 pub fn reevaluate_formula(sheet: &mut Spreadsheet, row: i16, col: i16, sleep_val: &mut f64) {
+    #[cfg(feature = "extensions")]
     if sheet.is_cell_locked(row, col) {
         return;
     }
