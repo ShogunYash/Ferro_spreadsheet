@@ -1,4 +1,7 @@
-use crate::spreadsheet::Spreadsheet;
+use crate::cell::CellValue;
+use crate::graph::remove_all_parents;
+use crate::reevaluate_topo::toposort_reval_detect_cycle;
+use crate::spreadsheet::{CommandStatus, Spreadsheet};
 
 /// Generates a string representation of a cell’s formula.
 ///
@@ -102,6 +105,42 @@ pub fn get_formula_string(sheet: &Spreadsheet, row: i16, col: i16) -> String {
         }
         _ => "Unknown formula".to_string(),
     }
+}
+
+/// Sets a cell's value directly, bypassing formula evaluation.
+///
+/// # Arguments
+///
+/// * `sheet` - The mutable spreadsheet.
+/// * `row` - The target row.
+/// * `col` - The target column.
+/// * `value` - The `CellValue` to set.
+/// * `sleep_time` - Accumulates sleep time.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - On success.
+/// * `CommandStatus::LockedCell` - If the cell is locked.
+pub fn set_cell_to_value(
+    sheet: &mut Spreadsheet,
+    row: i16,
+    col: i16,
+    value: CellValue,
+    sleep_time: &mut f64,
+) -> CommandStatus {
+    // Check if the cell is locked before setting the value
+    if sheet.is_cell_locked(row, col) {
+        return CommandStatus::LockedCell;
+    }
+    // Check if the value is a valid integer
+    let cell_key = sheet.get_key(row, col);
+    // remove all parents and set the value
+    remove_all_parents(sheet, row, col);
+    sheet.cell_meta.remove(&cell_key);
+    *sheet.get_mut_cell(row, col) = value;
+    toposort_reval_detect_cycle(sheet, row, col, sleep_time);
+    sheet.set_last_edited(row, col);
+    CommandStatus::CmdOk
 }
 
 #[cfg(test)]
