@@ -160,6 +160,7 @@ cargo run --release -- 999 18278
 - `HLP (cell)`to highlight parent
 - `HLC (cell)`to highlight children
 - `HLPC (cell)`to highlight parent and children
+- `HV (Range) Standard function` AVG,SUM,MAX,STDEV,MIN to get the range value using the function
 - Pressing upper arrow goes to previous command
 - Pressing down arrow goes to more recent command
 #### Extension to normal spreadsheet 
