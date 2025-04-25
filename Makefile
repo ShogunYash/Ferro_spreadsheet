@@ -1,4 +1,4 @@
-.PHONY: all clean run extensions vim vim-load test test-extensions coverage coverage-extensions view-report clippy clippy-extensions fmt fmt-fix
+.PHONY: all clean run extensions vim vim-load test test-extensions coverage coverage-extensions view-report clippy clippy-extensions fmt fmt-fix docs
 
 # Default target builds without extensions
 all: target/release/spreadsheet-core
@@ -38,6 +38,9 @@ test:
 test-extensions:
 	cargo test --features extensions
 
+docs:
+	cargo doc --no-deps
+	pdflatex report.tex
 # Code coverage targets
 coverage:
 	cargo tarpaulin --ignore-tests --out Html --include-files 'src/*'

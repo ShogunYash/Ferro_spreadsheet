@@ -272,15 +272,7 @@ impl Spreadsheet {
             String::from_utf8_unchecked(buffer)
         }
     }
-    /// Converts a column name to its index (e.g., "A" -> 0).
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - Column name (e.g., "A", "AA").
-    ///
-    /// # Returns
-    ///
-    /// * `i16` - Column index (0-based).
+
     pub fn column_name_to_index(&self, name: &str) -> i16 {
         let bytes = name.as_bytes();
         let mut index: i16 = 0;
@@ -289,54 +281,22 @@ impl Spreadsheet {
         }
         index - 1 // Convert from 1-based to 0-based
     }
-    /// Retrieves the value of a cell.
-    ///
-    /// # Arguments
-    ///
-    /// * `row` - Row index (0-based).
-    /// * `col` - Column index (0-based).
-    ///
-    /// # Returns
-    ///
-    /// * `&CellValue` - Reference to the cell’s value
+
     pub fn get_cell(&self, row: i16, col: i16) -> &CellValue {
         let index = self.get_index(row, col);
         &self.grid[index]
     }
-    /// Retrieves the value of a cell by its key.
-    ///
-    /// # Arguments
-    ///
-    /// * `cell_key` - Unique cell key.
-    ///
-    /// # Returns
-    ///
-    /// * `&CellValue` - Reference to the cell’s value.
+
     pub fn get_key_cell(&self, cell_key: i32) -> &CellValue {
         &self.grid[cell_key as usize]
     }
-    /// Retrieves a mutable reference to a cell’s value.
-    ///
-    /// # Arguments
-    ///
-    /// * `row` - Row index (0-based).
-    /// * `col` - Column index (0-based).
-    ///
-    /// # Returns
-    ///
-    /// * `&mut CellValue` - Mutable reference to the cell’s value.
+
     pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut CellValue {
         let index = self.get_index(row, col);
         &mut self.grid[index]
     }
 
-    /// Adds a range-based child dependency.
-    ///
-    /// # Arguments
-    ///
-    /// * `start_key` - Starting cell key of the range.
-    /// * `end_key` - Ending cell key of the range.
-    /// * `child_key` - Key of the dependent cell.
+    // Add a range-based child relationship
     pub fn add_range_child(&mut self, start_key: i32, end_key: i32, child_key: i32) {
         self.range_children.push(RangeChild {
             start_key,
@@ -345,26 +305,12 @@ impl Spreadsheet {
         });
     }
 
-    /// Removes all range-based dependencies for a child.
-    ///
-    /// # Arguments
-    ///
-    /// * `child_key` - Key of the child cell.
+    // Remove range-based child relationships for a given child
     pub fn remove_range_child(&mut self, child_key: i32) {
         self.range_children.retain(|rc| rc.child_key != child_key);
     }
 
-    /// Checks if a cell is within a specified range.
-    ///
-    /// # Arguments
-    ///
-    /// * `cell_key` - Key of the cell to check.
-    /// * `start_key` - Starting key of the range.
-    /// * `end_key` - Ending key of the range.
-    ///
-    /// # Returns
-    ///
-    /// * `bool` - True if the cell is in the range.
+    // Check if a cell is within a range
     pub fn is_cell_in_range(&self, cell_key: i32, start_key: i32, end_key: i32) -> bool {
         let (cell_row, cell_col) = self.get_row_col(cell_key);
         let (start_row, start_col) = self.get_row_col(start_key);
@@ -373,12 +319,7 @@ impl Spreadsheet {
         cell_row >= start_row && cell_row <= end_row && cell_col >= start_col && cell_col <= end_col
     }
 
-    /// Adds a child to a cell’s dependents.
-    ///
-    /// # Arguments
-    ///
-    /// * `parent_key` - Key of the parent cell.
-    /// * `child_key` - Key of the child cell.
+    // Add a child to a cell's dependents (modified for HashMap of boxed HashSets)
     pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
         self.children
             .entry(*parent_key)
@@ -386,12 +327,7 @@ impl Spreadsheet {
             .insert(*child_key);
     }
 
-    /// Removes a child from a cell’s dependents.
-    ///
-    /// # Arguments
-    ///
-    /// * `parent_key` - Key of the parent cell.
-    /// * `child_key` - Key of the child cell
+    // Remove a child from a cell's dependents (modified for HashMap of boxed HashSets)
     pub fn remove_child(&mut self, parent_key: i32, child_key: i32) {
         if let Some(children) = self.children.get_mut(&parent_key) {
             children.remove(&child_key);
@@ -403,15 +339,7 @@ impl Spreadsheet {
         }
     }
 
-    /// Retrieves the set of children for a cell.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - Key of the parent cell.
-    ///
-    /// # Returns
-    ///
-    /// * `Option<&HashSet<i32>>` - Set of child keys, if any.
+    // Get children for a cell (immutable) (modified for HashMap of boxed HashSets)
     pub fn get_cell_children(&self, key: i32) -> Option<&HashSet<i32>> {
         self.children.get(&key)
     }
@@ -473,11 +401,7 @@ impl Spreadsheet {
             Err(_) => CommandStatus::Unrecognized,
         }
     }
-    /// Scrolls the viewport in the specified direction.
-    ///
-    /// # Arguments
-    ///
-    /// * `direction` - 'w' (up), 's' (down), 'a' (left), 'd' (right).
+
     pub fn scroll_viewport(&mut self, direction: char) {
         const VIEWPORT_SIZE: i16 = 10;
         match direction {
