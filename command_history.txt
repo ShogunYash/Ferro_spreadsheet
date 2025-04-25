@@ -31,3 +31,19 @@ HLP C2
 HLC B2
 V (A1:B2) MAX
 q
+j
+h
+k
+l
+h
+visual A1
+V (A1:ZZZ999) SUM
+q
+A1=SUM(A1:ZZZ999)
+A1=SUM(A2:ZZZ999)
+visual A1
+q
+A1=A2
+HLP A1
+A1=SUM(A2:ZZZ999)
+q
