@@ -5,26 +5,31 @@
 
 mod cell;
 mod evaluator;
-mod extensions;
 mod formula;
 mod graph;
 mod process_command;
 mod reevaluate_topo;
-mod save_load;
-mod sheet_extra_impl;
 mod spreadsheet;
-mod vim_mode;
-mod visualize_cells;
-use crate::process_command::process_command;
 use std::env;
 use std::io::{self, Write};
 use std::process;
+#[cfg(feature = "extensions")]
+mod extensions;
+#[cfg(feature = "extensions")]
+mod save_load;
+#[cfg(feature = "extensions")]
+mod sheet_extra_impl;
+#[cfg(feature = "extensions")]
+mod vim_mode;
+#[cfg(feature = "extensions")]
+mod visualize_cells;
 
-use std::time::Instant;
-
+use crate::process_command::process_command;
+#[cfg(feature = "extensions")]
 use crate::save_load::{load_spreadsheet, save_spreadsheet};
-use spreadsheet::CommandStatus;
-use spreadsheet::Spreadsheet;
+use spreadsheet::{CommandStatus, Spreadsheet};
+use std::time::Instant;
+#[cfg(feature = "extensions")]
 const DEFAULT_FILENAME: &str = "rust_spreadsheet.sheet";
 
 /// Entry point for the spreadsheet application.
@@ -74,6 +79,7 @@ fn main() {
             process::exit(1);
         }
     };
+    #[cfg(feature = "extensions")]
     if vim_mode_enabled {
         // If args[4] exists, use it; else use default filename.
         let filename = if args.len() > 4 {
@@ -91,7 +97,8 @@ fn main() {
             Some(DEFAULT_FILENAME.to_string())
         };
         vim_mode::run_editor(&mut sheet, filename);
-    } else {
+    }
+    if !vim_mode_enabled {
         let mut last_time = start.elapsed().as_secs_f64(); // Update last_time with the command time
         let mut last_status = "ok"; // Placeholder for last status
         let mut input = String::with_capacity(128);
@@ -113,31 +120,35 @@ fn main() {
             if trimmed == "q" {
                 // Add save functionality before quitting ask the user
                 // if they want to save the spreadsheet
-                print!("Do you want to save the spreadsheet before quitting? (y/n): ");
-                io::stdout().flush().unwrap(); // Ensure the prompt is shown
-                // Take the user's response
-                let mut response = String::new();
-                io::stdin().read_line(&mut response).unwrap();
-                let response = response.trim(); // Remove any newline characters
-                if response == "y" {
-                    // Ask for the filename to save
-                    print!("Enter filename to save (default: {}): ", DEFAULT_FILENAME);
+                #[cfg(feature = "extensions")]
+                {
+                    print!("Do you want to save the spreadsheet before quitting? (y/n): ");
                     io::stdout().flush().unwrap(); // Ensure the prompt is shown
-                    let mut filename = String::new();
-                    io::stdin().read_line(&mut filename).unwrap();
-                    let filename = filename.trim(); // Remove any newline characters
+                    // Take the user's response
+                    let mut response = String::new();
+                    io::stdin().read_line(&mut response).unwrap();
+                    let response = response.trim(); // Remove any newline characters
+                    if response == "y" {
+                        // Ask for the filename to save
+                        print!("Enter filename to save (default: {}): ", DEFAULT_FILENAME);
+                        io::stdout().flush().unwrap(); // Ensure the prompt is shown
+                        let mut filename = String::new();
+                        io::stdin().read_line(&mut filename).unwrap();
+                        let filename = filename.trim(); // Remove any newline characters
 
-                    // Use the default filename if the user didn't enter anything
-                    let save_filename = if filename.is_empty() {
-                        DEFAULT_FILENAME
-                    } else {
-                        filename
-                    };
-                    save_spreadsheet(&sheet, save_filename);
+                        // Use the default filename if the user didn't enter anything
+                        let save_filename = if filename.is_empty() {
+                            DEFAULT_FILENAME
+                        } else {
+                            filename
+                        };
+                        save_spreadsheet(&sheet, save_filename);
+                    }
                 }
                 break;
             }
 
+            #[cfg(feature = "extensions")]
             // Add "open" command to load a spreadsheet
             if let Some(filename_part) = trimmed.strip_prefix("open ") {
                 let filename = filename_part;
@@ -165,8 +176,11 @@ fn main() {
                 CommandStatus::CmdOk => "ok",
                 CommandStatus::Unrecognized => "unrecognized_cmd",
                 CommandStatus::CircularRef => "circular_ref",
+                #[cfg(feature = "extensions")]
                 CommandStatus::InvalidCell => "invalid_cell",
+                #[cfg(feature = "extensions")]
                 CommandStatus::LockedCell => "locked_cell",
+                #[cfg(feature = "extensions")]
                 CommandStatus::NotLockedCell => "not_locked_cell",
             };
         }
