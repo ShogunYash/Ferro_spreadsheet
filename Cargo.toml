@@ -5,6 +5,11 @@ edition = "2024"
 authors = ["Ferro Spreadsheeter <cs1230592@iitd.ac.in>"]
 description = "A high perfromance spreadsheet implementation in Rust"
 
+# Define feature flags
+[features]
+default = []
+extensions = ["petgraph", "rustyline", "tempfile"]
+
 # Release profile optimization settings
 [profile.release]
 # Enable link-time optimization for better dead code elimination
@@ -27,9 +32,10 @@ panic = "abort"     # Removes panic unwinding code
 incremental = false # Disables incremental compilation in release
 
 [dependencies]
-petgraph = "0.6.4"  # Add this for graph visualization
-rustyline = "10.0.0"
-tempfile = "3.3.0"  
+# Optional dependencies only used with extensions
+petgraph = { version = "0.6.4", optional = true }
+rustyline = { version = "10.0.0", optional = true }
+tempfile = { version = "3.3.0", optional = true }
 
 [[bin]]
 name = "spreadsheet"
