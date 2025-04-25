@@ -12,122 +12,7 @@ Ferro Spreadsheet is a command-line spreadsheet application that supports:
 - Efficient handling of large spreadsheets
 - Dependency tracking and cycle detection
 
-## Design and Software Architecture
 
-### Core Design Philosophy
-
-Our design focuses on memory efficiency and performance by:
-1. Storing only non-default cell values
-2. Using efficient data structures to represent dependencies
-3. Employing topological sorting for formula re-evaluation
-4. Optimizing memory allocations with boxed collections
-
-### Architecture
-
-The application is built around these core components:
-
-- **Spreadsheet Structure**: Central data container with optimized storage
-- **Cell Management**: Handles individual cell operations and storage
-- **Formula Evaluation**: Processes formulas and dependencies
-- **Graph Management**: Tracks dependencies between cells
-- **Command Processing**: Interprets and executes user commands
-- **Visualization**: Displays the spreadsheet and relationships
-
-### Approaches for Encapsulation
-
-We implement encapsulation through Rust's module system:
-1. The `Spreadsheet` struct exposes only necessary methods publicly
-2. Internal implementation details are hidden from the public API
-3. Each module has a clear responsibility and hides its implementation
-
-## Primary Data Structures
-
-### Spreadsheet
-
-The core `Spreadsheet` struct uses several optimized data structures:
-
-```rust
-pub struct Spreadsheet {
-    pub grid: Vec<CellValue>,                                // Vector of CellValues (contiguous in memory)
-    pub children: HashMap<i32, Box<HashSet<i32>>>,           // Map from cell key to boxed HashSet of children
-    pub range_children: Vec<RangeChild>,                     // Vector of range-based child relationships
-    pub cell_meta: HashMap<i32, CellMeta>,                   // Map from cell key to metadata
-    // ...other fields...
-}
-```
-
-Key design choices:
-
-1. **On-demand allocation**: The `children` field uses a HashMap that only allocates HashSets for cells with dependencies, saving memory
-2. **Boxed HashSets**: Each children HashSet is boxed to allow for different sizes without affecting locality
-3. **Range-based optimizations**: The `range_children` structure optimizes range-based formulas by storing ranges instead of individual cells
-4. **Sparse metadata**: The `cell_meta` HashMap only stores metadata for cells with formulas, not empty cells
-
-### Range Child
-
-For efficient range-based formula handling:
-
-```rust
-pub struct RangeChild {
-    pub start_key: i32,       // Range start cell key
-    pub end_key: i32,         // Range end cell key
-    pub child_key: i32,       // Child cell key
-}
-```
-
-This structure reduces memory usage by not creating individual dependencies for each cell in a range.
-
-### CellMeta
-
-Stores formula information while keeping the grid simple:
-
-```rust
-pub struct CellMeta {
-    pub formula: i16,
-    pub parent1: i32,
-    pub parent2: i32,
-}
-```
-
-## Interfaces Between Software Modules
-
-The application has clean interfaces between its major components:
-
-### Spreadsheet ⟷ Evaluator
-
-- Evaluator uses Spreadsheet's public API to read and modify cells
-- Spreadsheet provides methods like `get_cell`, `get_mut_cell`, and `get_cell_meta`
-
-### Evaluator ⟷ Graph
-
-- Evaluator calls Graph functions to handle adding and removing cell dependencies
-- Graph updates the dependency structures in the Spreadsheet
-
-### Graph ⟷ Reevaluate Topological Sort
-
-- The Graph module provides functions for cycle detection
-- The Reevaluate module performs topological sorting to determine evaluation order
-
-## Extensions
-
-### Implemented Extensions
-
-1. **Memory Optimization**
-   - Boxed HashSets for variable-sized collections
-   - HashMap-based sparse storage for cell children
-   - Range-based dependency tracking
-
-2. **Efficient Formula Evaluation**
-   - Topological sorting for efficient re-evaluation
-   - Range-based function optimizations
-
-3. **Visualization**
-   - Cell dependency visualization
-   - Textual representation of relationships
-
-### Extensions That Couldn't Be Implemented
-
-We initially planned to implement thread-based parallel formula evaluation, but we faced challenges with Rust's ownership model when sharing the spreadsheet across threads. The borrowing rules made it difficult to update cells concurrently while maintaining proper dependencies.
 
 ## Code Documentation
 
@@ -262,9 +147,23 @@ cargo run --release -- 999 18278
 - `C1=SUM(A1:B5)` - Set C1 to the sum of the range A1:B5
 - `w`, `a`, `s`, `d` - Scroll viewport
 - `scroll_to A10` - Move viewport to cell A10
-- `visual A1` - Show dependencies for cell A1
 - `enable_output`, `disable_output` - Toggle spreadsheet display
 - `q` - Quit the application
+#### Vim mode/ext1 
+- `h`to move left, `j` to move down ,`k`to move up ,`l` to move the cursor right
+- `visual A1` - Show dependencies for cell A1
+- `i` to enter insert mode
+- `esc` to exit insert mode
+- `:q`to quit the program 
+- `:wq` to save and quit the program
+- `:w` to save the program 
+- `HLP (cell)`to highlight parent
+- `HLC (cell)`to highlight children
+- `HLPC (cell)`to highlight parent and children
+- Pressing upper arrow goes to previous command
+- Pressing down arrow goes to more recent command
+#### Extension to normal spreadsheet 
+- 
 
 ## Testing Approach
 

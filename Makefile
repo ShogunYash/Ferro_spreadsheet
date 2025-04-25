@@ -13,6 +13,7 @@ target/release/spreadsheet-extensions:
 
 clean:
 	cargo clean
+	rm -f report.aux report.log report.out report.pdf report.toc *.dot *.png *.html *.sheet *.txt
 
 # Run without extensions
 run: target/release/spreadsheet-core

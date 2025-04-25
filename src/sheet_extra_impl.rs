@@ -3,6 +3,7 @@ use crate::formula::Range;
 use crate::spreadsheet::{CellMeta, CommandStatus, HighlightType, Spreadsheet};
 use crate::visualize_cells;
 use std::cmp::min;
+use std::cmp::min;
 
 impl Spreadsheet {
     pub fn get_cell_meta_ref(&self, row: i16, col: i16) -> &CellMeta {
@@ -62,6 +63,19 @@ impl Spreadsheet {
     /// # Returns
     ///
     /// A `bool` indicating whether the cell is locked (`true`) or not (`false`).
+    /// Checks if a cell at the specified row and column is locked.
+    ///
+    /// A cell is considered locked if it falls within any of the locked ranges
+    /// stored in the spreadsheet.
+    ///
+    /// # Arguments
+    ///
+    /// * `row` - The row index of the cell (0-based).
+    /// * `col` - The column index of the cell (0-based).
+    ///
+    /// # Returns
+    ///
+    /// A `bool` indicating whether the cell is locked (`true`) or not (`false`).
     pub fn is_cell_locked(&self, row: i16, col: i16) -> bool {
         for range in &self.locked_ranges {
             if row >= range.start_row
@@ -92,6 +106,10 @@ impl Spreadsheet {
     ///
     /// If a cell was previously marked as the last edited cell, this function updates
     /// the spreadsheet's viewport to center on that cell's coordinates.
+    /// Scrolls the viewport to the last edited cell.
+    ///
+    /// If a cell was previously marked as the last edited cell, this function updates
+    /// the spreadsheet's viewport to center on that cell's coordinates.
     pub fn scroll_to_last_edited(&mut self) {
         if let Some((row, col)) = self.last_edited {
             self.viewport_row = row;
@@ -99,6 +117,20 @@ impl Spreadsheet {
         }
     }
 
+    /// Retrieves the name of a cell at the specified row and column.
+    ///
+    /// If the cell is part of a named range (a single-cell range with an associated name),
+    /// the function returns that name. Otherwise, it generates a standard cell name in
+    /// the format `<column_letter><row_number>` (e.g., `A1`).
+    ///
+    /// # Arguments
+    ///
+    /// * `row` - The row index of the cell (0-based).
+    /// * `col` - The column index of the cell (0-based).
+    ///
+    /// # Returns
+    ///
+    /// A `String` representing the name of the cell.
     /// Retrieves the name of a cell at the specified row and column.
     ///
     /// If the cell is part of a named range (a single-cell range with an associated name),

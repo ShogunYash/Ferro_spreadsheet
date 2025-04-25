@@ -45,9 +45,9 @@
 \author{
   Karthik Manikandan\\ 2023CS10298
   \and
-  Yash Shindekar \\ 2023CS1
+  Yash Shindekar \\ 2023CS10592
   \and
-  Divya Haasini \\2023CS1
+  Divya Haasini \\2023CS10958
 }
 
 \date{\today}
@@ -814,6 +814,53 @@ impl Spreadsheet {
             (range.start_row, range.start_col, range.end_row, range.end_col)
         })
     }
+}
+\end{lstlisting}
+\subsection{Completed Extensions and Future Work}
+
+All extensions proposed in our initial project plan have been successfully implemented, including the visualization module and vim mode. These implementations fulfill our core project requirements and demonstrate the extensibility of our modular design.
+
+The web interface mentioned in our original proposal was designated as a stretch goal contingent on available time. Due to time constraints and our focus on ensuring the quality and robustness of the core functionality, we decided to defer the web interface implementation to future work. This decision allowed us to deliver a more polished terminal-based application with complete documentation and thorough testing.
+
+We initially planned to implement thread-based parallel formula evaluation, but we faced challenges with Rust's ownership model when sharing the spreadsheet across threads. The borrowing rules made it difficult to update cells concurrently while maintaining proper dependencies.
+
+The extensions outlined in this section represent potential future directions for the project, building upon the solid foundation we have established. These enhancements would further improve usability, add powerful features, and potentially expand the application to web-based environments in line with our original stretch goals.
+
+\begin{lstlisting}[language=Rust, caption={Potential future web interface implementation}, label=lst:web-interface]
+// Example of how a web interface adapter might be implemented
+pub struct WebInterface {
+spreadsheet: Arc<Mutex<Spreadsheet>>,
+server: Option<Server>,
+}
+
+impl WebInterface {
+pub fn new(spreadsheet: Spreadsheet) -> Self {
+WebInterface {
+spreadsheet: Arc::new(Mutex::new(spreadsheet)),
+server: None,
+}
+}
+
+text
+pub fn start_server(&mut self, port: u16) -> Result<(), String> {
+    let spreadsheet = Arc::clone(&self.spreadsheet);
+    
+    // Set up HTTP routes
+    let routes = Router::new()
+        .route("/", get(|| async { "Spreadsheet Web Interface" }))
+        .route("/api/cells", get(move || {
+            let sheet = spreadsheet.lock().unwrap();
+            // Return JSON representation of cells
+        }))
+        .route("/api/update", post(move |payload: Json<UpdateRequest>| {
+            let mut sheet = spreadsheet.lock().unwrap();
+            // Process update request
+        }));
+        
+    // Start server
+    self.server = Some(Server::bind(&format!("127.0.0.1:{}", port)));
+    Ok(())
+}
 }
 \end{lstlisting}
 

@@ -1224,6 +1224,7 @@ mod tests {
 
     #[test]
     fn test_divide() {
+    fn test_divide() {
         let mut sheet = create_test_spreadsheet(5, 5);
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(10);
         *sheet.get_mut_cell(0, 1) = CellValue::Integer(2);
@@ -1236,6 +1237,7 @@ mod tests {
     }
 
     #[test]
+    fn test_sleep_evaluator() {
     fn test_sleep_evaluator() {
         let mut sheet = create_test_spreadsheet(5, 5);
         *sheet.get_mut_cell(0, 0) = CellValue::Integer(1);
@@ -1529,6 +1531,7 @@ mod extension_tests {
 
     #[test]
     fn test_name_handle() {
+    fn test_name_handle() {
         let mut sheet = create_test_spreadsheet(5, 5);
         let mut sleep_time = 0.0;
         assert_eq!(
@@ -1564,6 +1567,7 @@ mod extension_tests {
 
     #[test]
     fn test_hlp_hlpc() {
+    fn test_hlp_hlpc() {
         let mut sheet = create_test_spreadsheet(5, 5);
         let mut sleep_time = 0.0;
         assert_eq!(
@@ -1577,6 +1581,7 @@ mod extension_tests {
     }
 
     #[test]
+    fn test_name() {
     fn test_name() {
         let mut sheet = create_test_spreadsheet(5, 5);
         let mut sleep_time = 0.0;
