@@ -167,29 +167,70 @@ impl Spreadsheet {
         })
     }
 
-    /// Computes the unique key for a cell.
+   /// Computes the unique key for a cell based on row and column.
+    ///
+    /// # Arguments
+    ///
+    /// * `row` - Row index (0-based).
+    /// * `col` - Column index (0-based).
+    ///
+    /// # Returns
+    ///
+    /// * `i32` - Unique key for the cell.
     pub fn get_key(&self, row: i16, col: i16) -> i32 {
         row as i32 * self.cols as i32 + col as i32
     }
-
-    // Helper to get coordinates from cell key
+    /// Converts a cell key back to row and column coordinates.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Unique cell key.
+    ///
+    /// # Returns
+    ///
+    /// * `(i16, i16)` - Tuple of (row, col).
     pub fn get_row_col(&self, key: i32) -> (i16, i16) {
         let row = (key / (self.cols as i32)) as i16;
         let col = (key % (self.cols as i32)) as i16;
         (row, col)
     }
-
-    // Helper to get index from row and column
+    /// Computes the grid index from row and column.
+    ///
+    /// # Arguments
+    ///
+    /// * `row` - Row index (0-based).
+    /// * `col` - Column index (0-based).
+    ///
+    /// # Returns
+    ///
+    /// * `usize` - Index in the grid vector.
     pub fn get_index(&self, row: i16, col: i16) -> usize {
         (row as usize) * (self.cols as usize) + (col as usize)
     }
-
-    // Get cell metadata, creating it if it doesn't exist
+    /// Retrieves or creates metadata for a cell.
+    ///
+    /// # Arguments
+    ///
+    /// * `row` - Row index (0-based).
+    /// * `col` - Column index (0-based).
+    ///
+    /// # Returns
+    ///
+    /// * `&mut CellMeta` - Mutable reference to cell metadata.
     pub fn get_cell_meta(&mut self, row: i16, col: i16) -> &mut CellMeta {
         let key = self.get_key(row, col);
         self.cell_meta.entry(key).or_insert_with(CellMeta::new)
     }
-
+    /// Retrieves cell metadata, returning a default if absent.
+    ///
+    /// # Arguments
+    ///
+    /// * `row` - Row index (0-based).
+    /// * `col` - Column index (0-based).
+    ///
+    /// # Returns
+    ///
+    /// * `&CellMeta` - Reference to cell metadata.
     pub fn get_cell_meta_ref(&self, row: i16, col: i16) -> &CellMeta {
         let key = self.get_key(row, col);
         self.cell_meta.get(&key).unwrap_or(&CellMeta {
@@ -198,7 +239,15 @@ impl Spreadsheet {
             parent2: -1,
         })
     }
-
+    /// Converts a column index to its alphabetical name (e.g., 0 -> "A").
+    ///
+    /// # Arguments
+    ///
+    /// * `col` - Column index (0-based).
+    ///
+    /// # Returns
+    ///
+    /// * `String` - Column name (e.g., "A", "AA").
     pub fn get_column_name(&self, mut col: i16) -> String {
         // Pre-calculate the length needed for the string
         let mut temp_col = col + 1; // Convert from 0-based to 1-based
@@ -232,7 +281,15 @@ impl Spreadsheet {
             String::from_utf8_unchecked(buffer)
         }
     }
-
+    /// Converts a column name to its index (e.g., "A" -> 0).
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Column name (e.g., "A", "AA").
+    ///
+    /// # Returns
+    ///
+    /// * `i16` - Column index (0-based).
     pub fn column_name_to_index(&self, name: &str) -> i16 {
         let bytes = name.as_bytes();
         let mut index: i16 = 0;
@@ -241,22 +298,54 @@ impl Spreadsheet {
         }
         index - 1 // Convert from 1-based to 0-based
     }
-
+    /// Retrieves the value of a cell.
+    ///
+    /// # Arguments
+    ///
+    /// * `row` - Row index (0-based).
+    /// * `col` - Column index (0-based).
+    ///
+    /// # Returns
+    ///
+    /// * `&CellValue` - Reference to the cell’s value
     pub fn get_cell(&self, row: i16, col: i16) -> &CellValue {
         let index = self.get_index(row, col);
         &self.grid[index]
     }
-
+    /// Retrieves the value of a cell by its key.
+    ///
+    /// # Arguments
+    ///
+    /// * `cell_key` - Unique cell key.
+    ///
+    /// # Returns
+    ///
+    /// * `&CellValue` - Reference to the cell’s value.
     pub fn get_key_cell(&self, cell_key: i32) -> &CellValue {
         &self.grid[cell_key as usize]
     }
-
+    /// Retrieves a mutable reference to a cell’s value.
+    ///
+    /// # Arguments
+    ///
+    /// * `row` - Row index (0-based).
+    /// * `col` - Column index (0-based).
+    ///
+    /// # Returns
+    ///
+    /// * `&mut CellValue` - Mutable reference to the cell’s value.
     pub fn get_mut_cell(&mut self, row: i16, col: i16) -> &mut CellValue {
         let index = self.get_index(row, col);
         &mut self.grid[index]
     }
 
-    // Add a range-based child relationship
+    /// Adds a range-based child dependency.
+    ///
+    /// # Arguments
+    ///
+    /// * `start_key` - Starting cell key of the range.
+    /// * `end_key` - Ending cell key of the range.
+    /// * `child_key` - Key of the dependent cell.
     pub fn add_range_child(&mut self, start_key: i32, end_key: i32, child_key: i32) {
         self.range_children.push(RangeChild {
             start_key,
@@ -265,12 +354,26 @@ impl Spreadsheet {
         });
     }
 
-    // Remove range-based child relationships for a given child
+    /// Removes all range-based dependencies for a child.
+    ///
+    /// # Arguments
+    ///
+    /// * `child_key` - Key of the child cell.
     pub fn remove_range_child(&mut self, child_key: i32) {
         self.range_children.retain(|rc| rc.child_key != child_key);
     }
 
-    // Check if a cell is within a range
+    /// Checks if a cell is within a specified range.
+    ///
+    /// # Arguments
+    ///
+    /// * `cell_key` - Key of the cell to check.
+    /// * `start_key` - Starting key of the range.
+    /// * `end_key` - Ending key of the range.
+    ///
+    /// # Returns
+    ///
+    /// * `bool` - True if the cell is in the range.
     pub fn is_cell_in_range(&self, cell_key: i32, start_key: i32, end_key: i32) -> bool {
         let (cell_row, cell_col) = self.get_row_col(cell_key);
         let (start_row, start_col) = self.get_row_col(start_key);
@@ -279,7 +382,12 @@ impl Spreadsheet {
         cell_row >= start_row && cell_row <= end_row && cell_col >= start_col && cell_col <= end_col
     }
 
-    // Add a child to a cell's dependents (modified for HashMap of boxed HashSets)
+    /// Adds a child to a cell’s dependents.
+    ///
+    /// # Arguments
+    ///
+    /// * `parent_key` - Key of the parent cell.
+    /// * `child_key` - Key of the child cell.
     pub fn add_child(&mut self, parent_key: &i32, child_key: &i32) {
         self.children
             .entry(*parent_key)
@@ -287,7 +395,12 @@ impl Spreadsheet {
             .insert(*child_key);
     }
 
-    // Remove a child from a cell's dependents (modified for HashMap of boxed HashSets)
+    /// Removes a child from a cell’s dependents.
+    ///
+    /// # Arguments
+    ///
+    /// * `parent_key` - Key of the parent cell.
+    /// * `child_key` - Key of the child cell
     pub fn remove_child(&mut self, parent_key: i32, child_key: i32) {
         if let Some(children) = self.children.get_mut(&parent_key) {
             children.remove(&child_key);
@@ -299,21 +412,43 @@ impl Spreadsheet {
         }
     }
 
-    // Get children for a cell (immutable) (modified for HashMap of boxed HashSets)
+    /// Retrieves the set of children for a cell.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Key of the parent cell.
+    ///
+    /// # Returns
+    ///
+    /// * `Option<&HashSet<i32>>` - Set of child keys, if any.
     pub fn get_cell_children(&self, key: i32) -> Option<&HashSet<i32>> {
         self.children.get(&key)
     }
-
+    /// Sets a cell to be highlighted with a specific type.
+    ///
+    /// # Arguments
+    ///
+    /// * `row` - Row index (0-based).
+    /// * `col` - Column index (0-based).
+    /// * `highlight_type` - Type of highlighting to apply.
     pub fn set_highlight(&mut self, row: i16, col: i16, highlight_type: HighlightType) {
         self.highlight_cell = self.get_key(row, col);
         self.highlight_type = highlight_type;
     }
-
+    /// Disables highlighting for all cells.
     pub fn disable_highlight(&mut self) {
         self.highlight_cell = -1;
         self.highlight_type = HighlightType::None;
     }
-
+    /// Checks if a cell is highlighted and its highlight type.
+    ///
+    /// # Arguments
+    ///
+    /// * `cell_key` - Key of the cell to check.
+    ///
+    /// # Returns
+    ///
+    /// * `(bool, HighlightType)` - (Is highlighted, Highlight type).
     pub fn is_highlighted(&self, cell_key: i32) -> (bool, HighlightType) {
         if self.highlight_cell == -1 || self.highlight_type == HighlightType::None {
             return (false, HighlightType::None);
@@ -373,7 +508,10 @@ impl Spreadsheet {
         // If not a parent or child, return false
         (false, HighlightType::None)
     }
-
+    /// Prints the spreadsheet with highlighted cells.
+    ///
+    /// Uses ANSI colors to highlight parent, child, and selected cells.
+    /// Only prints if output is enabled.
     pub fn print_spreadsheet_with_highlights(&self) {
         if !self.output_enabled {
             return;
@@ -434,7 +572,10 @@ impl Spreadsheet {
             println!();
         }
     }
-
+    /// Prints the spreadsheet without highlights.
+    ///
+    /// Displays a portion of the grid based on the viewport.
+    /// Only prints if output is enabled.
     pub fn print_spreadsheet(&self) {
         if !self.output_enabled {
             return;
@@ -490,7 +631,11 @@ impl Spreadsheet {
             Err(_) => CommandStatus::Unrecognized,
         }
     }
-
+    /// Scrolls the viewport in the specified direction.
+    ///
+    /// # Arguments
+    ///
+    /// * `direction` - 'w' (up), 's' (down), 'a' (left), 'd' (right).
     pub fn scroll_viewport(&mut self, direction: char) {
         const VIEWPORT_SIZE: i16 = 10;
         match direction {
