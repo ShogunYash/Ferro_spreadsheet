@@ -83,12 +83,12 @@ pub fn visualize_cell_relationships(
             // For range formulas, parent1 is the start cell key and parent2 is the end cell key
             let start_key = meta.parent1;
             let end_key = meta.parent2;
-            
+
             if start_key >= 0 && end_key >= 0 {
                 // Get the row and column for range display
                 let (start_r, start_c) = spreadsheet.get_row_col(start_key);
                 let (end_r, end_c) = spreadsheet.get_row_col(end_key);
-                
+
                 // Create a special range node to represent the range
                 let range_name = format!(
                     "Range {}{}:{}{}",
@@ -97,12 +97,11 @@ pub fn visualize_cell_relationships(
                     spreadsheet.get_column_name(end_c),
                     end_r + 1
                 );
-                
+
                 let range_node = graph.add_node(range_name);
-                
+
                 // Add edge from range to the target cell
                 graph.add_edge(range_node, target_node, "provides data to");
-                
             }
         } else {
             // For normal formula types, handle individual parents
@@ -214,11 +213,11 @@ pub fn visualize_cell_relationships(
             has_parents = true;
             let start_key = meta.parent1;
             let end_key = meta.parent2;
-            
+
             if start_key >= 0 && end_key >= 0 {
                 let (start_r, start_c) = spreadsheet.get_row_col(start_key);
                 let (end_r, end_c) = spreadsheet.get_row_col(end_key);
-                
+
                 // Determine the function type
                 let function_name = match meta.formula {
                     5 => "SUM",
@@ -228,7 +227,7 @@ pub fn visualize_cell_relationships(
                     9 => "STDEV",
                     _ => "UNKNOWN",
                 };
-                
+
                 println!(
                     "    - Range function: {} on range {}{}:{}{}",
                     function_name,
