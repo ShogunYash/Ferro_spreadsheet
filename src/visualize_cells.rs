@@ -16,6 +16,30 @@ use petgraph::{
 use std::collections::HashMap;
 use std::{fs::File, io::Write, process::Command};
 
+/// Visualizes the relationships of a specified cell, including direct and range-based parents and children.
+///
+/// This function creates a directed graph representing the cell's dependencies and dependents, saves it as a DOT file,
+/// and attempts to render it as a PNG image using Graphviz. It also prints a textual representation of the relationships
+/// to the console, including direct parents, range-based parents, direct children, and range-based children. The graph
+/// includes nodes for the target cell, its parents, children, and any ranges it is part of, with labeled edges indicating
+/// the nature of the relationships (e.g., "depends on", "used by", "part of range used by").
+///
+/// # Arguments
+///
+/// * `spreadsheet` - A reference to the `Spreadsheet` containing the cell data and relationships.
+/// * `row` - The zero-based row index of the target cell.
+/// * `col` - The zero-based column index of the target cell.
+///
+/// # Returns
+///
+/// * `CommandStatus::CmdOk` - If the visualization is successful or encounters non-critical errors (e.g., Graphviz not found).
+/// * `CommandStatus::CmdInvalidCell` - If the specified row or column is out of bounds for the spreadsheet.
+///
+/// # Side Effects
+///
+/// * Creates a DOT file named `cell_{row}_{col}_relationships.dot` in the current directory.
+/// * Attempts to open the PNG file with the default image viewer on the user's operating system (Windows, macOS, or Linux).
+/// * Prints the textual representation of the cell's relationships to the console.
 pub fn visualize_cell_relationships(
     spreadsheet: &Spreadsheet,
     row: i16,
