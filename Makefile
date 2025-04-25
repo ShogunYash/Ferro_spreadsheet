@@ -1,4 +1,4 @@
-.PHONY: all clean run vim
+.PHONY: all clean run test coverage docs ext1
 
 all: target/release/spreadsheet
 
@@ -7,13 +7,28 @@ target/release/spreadsheet:
 	
 clean:
 	cargo clean
+	rm -f report.aux report.log report.out report.pdf report.toc *.dot *.png *.html *.sheet *.txt
 
 run: target/release/spreadsheet
 	./target/release/spreadsheet 999 18278
 
-vim: target/release/spreadsheet
-#	./target/release/spreadsheet --vim 999 18278
+ext1: target/release/spreadsheet
 	./target/release/spreadsheet --vim 999 18278 rust_spreadsheet.sheet
+
+# Run all tests
+test:
+	cargo test
+
+# Run test coverage with tarpaulin
+coverage:
+	cargo tarpaulin --out Html --output-dir coverage
+
+# Generate documentation
+docs:
+	cargo doc --no-deps
+	pdflatex report.tex
+
+
 # # Makefile for Ferro_spreadsheet
 
 # # Detect the environment

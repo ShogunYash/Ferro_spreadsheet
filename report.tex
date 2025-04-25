@@ -822,6 +822,8 @@ All extensions proposed in our initial project plan have been successfully imple
 
 The web interface mentioned in our original proposal was designated as a stretch goal contingent on available time. Due to time constraints and our focus on ensuring the quality and robustness of the core functionality, we decided to defer the web interface implementation to future work. This decision allowed us to deliver a more polished terminal-based application with complete documentation and thorough testing.
 
+We initially planned to implement thread-based parallel formula evaluation, but we faced challenges with Rust's ownership model when sharing the spreadsheet across threads. The borrowing rules made it difficult to update cells concurrently while maintaining proper dependencies.
+
 The extensions outlined in this section represent potential future directions for the project, building upon the solid foundation we have established. These enhancements would further improve usability, add powerful features, and potentially expand the application to web-based environments in line with our original stretch goals.
 
 \begin{lstlisting}[language=Rust, caption={Potential future web interface implementation}, label=lst:web-interface]
